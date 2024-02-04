@@ -74,4 +74,4 @@ class CommitVisualiser:
         plt.grid(True)
         plt.legend()
 
-        plt.savefig('plot.png')
+        plt.savefig('images/plot.png')
