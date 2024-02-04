@@ -52,36 +52,21 @@ class APIConnectionAsync:
                           max_tries=4,
                           giveup=lambda e: e.status == 400)
     async def make_request(self, url):
-        sleep_time = 0
-
         async with self.semaphore:
             async with self.session.get(url, headers={'Authorization': f'token {self.access_token}'}) as response:
 
-                if 'X-RateLimit-Remaining' in response.headers and response.headers['X-RateLimit-Remaining'] < '1':
+                if 'X-RateLimit-Remaining' in response.headers and response.headers['X-RateLimit-Remaining'] < 1:
                     reset_time = int(response.headers['X-RateLimit-Reset'])
                     sleep_time = reset_time - time.time() + 10  # Add a buffer of 10 seconds
                     print(f'Rate limit exceeded. Sleeping for {sleep_time} seconds.')
+                    await asyncio.sleep(sleep_time)
+                    return await self.make_request(url)
 
                 response.raise_for_status()
-
-                if sleep_time <= 0:
-                    try:
-                        json_data = await response.json()
-                        return json_data, response.headers
-                    except aiohttp.ClientResponseError as e:
-                        print(f'HTTP Error: {e}')
-                        return None
-                    except json.JSONDecodeError as e:
-                        print(f'Failed to decode JSON: {e}')
-                        return
-
-        if sleep_time > 0:
-            await asyncio.sleep(sleep_time)
-            return await self.make_request(url)
+                return await response.json(), response.headers
 
     async def get_next_link(self, headers):
         link_header = headers.get('link', None)
-        # link_header = response.headers.get('link', None)
 
         if link_header:
             links = parse_header_links(link_header)
@@ -122,14 +107,10 @@ class APIConnectionAsync:
     async def get_commit_info(self, sha):
         get_commit_info_url = f'{self.get_commits_url}/{str(sha)}'
         response, headers = await self.make_request(get_commit_info_url)
-
         return response
 
-    async def batch_get_commit_info(self, update=False, batch_size=20):
+    async def batch_get_commit_info(self, update=False, batch_size=200):
         commit_info_list = []
-        new_commits = []
-
-        repository_commits = await AsyncDatabase.find(self.commit_list_collection, {})
 
         list_shas = await AsyncDatabase.fetch_all_shas(self.commit_list_collection)
         full_info_shas = await AsyncDatabase.fetch_all_shas(self.full_commit_info_collection)
