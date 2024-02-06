@@ -12,6 +12,11 @@ class AsyncDatabase:
         AsyncDatabase.DATABASE = client['github_data']
 
     @staticmethod
+    async def fetch_all(collection):
+        data = await AsyncDatabase.find(collection, query={})
+        return data
+
+    @staticmethod
     async def fetch_all_shas(collection):
         commits = await AsyncDatabase.find(collection, query={}, projection={'sha': 1})  # Fetch only the SHA field
         return {commit['sha'] for commit in commits}
@@ -21,16 +26,26 @@ class AsyncDatabase:
         await AsyncDatabase.DATABASE[collection].insert_one(data)
 
     @staticmethod
-    async def insert_many(collection, data):
+    async def insert_many(collection, data, data_type='commit'):
         operations = []
 
-        for commit in data:
-            operation = pymongo.UpdateOne(
-                {'sha': commit['sha']},
-                {'$setOnInsert': commit},
-                upsert=True
-            )
-            operations.append(operation)
+        if data_type == 'commit':
+            for commit in data:
+                operation = pymongo.UpdateOne(
+                    {'sha': commit['sha']},
+                    {'$setOnInsert': commit},
+                    upsert=True
+                )
+                operations.append(operation)
+
+        elif data_type == 'files':
+            for datapoint in data:
+                operation = pymongo.UpdateOne(
+                    {'path': datapoint['path']},
+                    {'$set': datapoint},
+                    upsert=True
+                )
+                operations.append(operation)
 
         if operations:
             await AsyncDatabase.DATABASE[collection].bulk_write(operations)
