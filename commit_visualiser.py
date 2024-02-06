@@ -55,7 +55,7 @@ class CommitVisualiser:
         if self.daily_df is None or self.daily_commit_count_df is None:
             raise ValueError('Data is not processed. Call process_data() before plotting!')
 
-        plt.figure(figsize=(12,6))
+        plt.figure(figsize=(12, 6))
 
         for stat in stats_to_plot:
             if stat == 'commits':
