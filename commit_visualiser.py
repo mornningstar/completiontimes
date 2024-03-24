@@ -5,49 +5,61 @@ import matplotlib.pyplot as plt
 
 
 class CommitVisualiser:
+    DATAFRAME_COLLECTION = "dataframes_commits"
 
     def __init__(self, collection_name):
+        self.data_df = None
         self.collection_name = collection_name
         self.commit_data = None
         self.daily_df = None
         self.daily_commit_count_df = None
 
     async def fetch_data(self):
-        self.commit_data = await AsyncDatabase.find(self.collection_name, {})
+        self.data_df = await AsyncDatabase.load_dataframe(self.DATAFRAME_COLLECTION, self.collection_name)
 
-    def process_data(self):
-        times = []
-        totals = []
-        additions = []
-        deletions = []
-        commit_counts = []
+        if self.data_df is not None:
+            await self.process_data(self.data_df)
+        else:
+            self.commit_data = await AsyncDatabase.find(self.collection_name, {})
+            await self.process_data()
 
-        for commit in self.commit_data:
-            try:
-                commit_date = commit['commit']['author']['date']
-                stats = commit['stats']
+    async def process_data(self, df=None):
+        if df is None:
+            times = []
+            totals = []
+            additions = []
+            deletions = []
+            commit_counts = []
 
-                commit_date = pd.to_datetime(commit_date)
+            for commit in self.commit_data:
+                try:
+                    commit_date = commit['commit']['author']['date']
+                    stats = commit['stats']
 
-                times.append(commit_date)
-                totals.append(stats.get('total', 0))
-                additions.append(stats.get('additions', 0))
-                deletions.append(stats.get('deletions', 0))
-                commit_counts.append(1)
+                    commit_date = pd.to_datetime(commit_date)
 
-            except KeyError:
-                pass
+                    times.append(commit_date)
+                    totals.append(stats.get('total', 0))
+                    additions.append(stats.get('additions', 0))
+                    deletions.append(stats.get('deletions', 0))
+                    commit_counts.append(1)
 
-        df = pd.DataFrame({
-            'time': times,
-            'totals': totals,
-            'additions': additions,
-            'deletions': deletions,
-            'commit_counts': commit_counts
-        })
+                except KeyError:
+                    pass
 
-        df.sort_values(by='time', inplace=True)
-        df.set_index('time', inplace=True)
+            df = pd.DataFrame({
+                'time': times,
+                'totals': totals,
+                'additions': additions,
+                'deletions': deletions,
+                'commit_counts': commit_counts
+            })
+
+            df.sort_values(by='time', inplace=True)
+            df.set_index('time', inplace=True)
+
+            await AsyncDatabase.save_dataframe(self.DATAFRAME_COLLECTION, self.collection_name, df)
+
         self.daily_df = df.resample('D').sum()
         self.daily_commit_count_df = df.resample('D').count()['commit_counts']
 

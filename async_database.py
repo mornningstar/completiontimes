@@ -1,3 +1,4 @@
+import pandas as pd
 import pymongo
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -58,3 +59,26 @@ class AsyncDatabase:
     @staticmethod
     async def find_one(collection, query):
         return await AsyncDatabase.DATABASE[collection].find_one(query)
+
+    @staticmethod
+    async def save_dataframe(collection, repository_name, dataframe):
+        json_dataframe = dataframe.to_json()
+        document = {
+            "repository_name": repository_name,
+            "dataframe": json_dataframe
+        }
+
+        await AsyncDatabase.DATABASE[collection].replace_one(
+            {"repository_name": repository_name},
+            document,
+            upsert=True)
+
+    @staticmethod
+    async def load_dataframe(collection, repository_name):
+        document = await AsyncDatabase.DATABASE[collection].find_one({"repository_name": repository_name})
+
+        if document:
+            dataframe = pd.read_json(document['dataframe'])
+            return dataframe
+
+        return None
