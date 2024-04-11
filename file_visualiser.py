@@ -1,7 +1,13 @@
+import os
+
+import matplotlib
 import pandas as pd
-from matplotlib import pyplot as plt
+
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 
 from async_database import AsyncDatabase
+from file_size_predictor import FileSizePredictor
 
 
 class FileVisualiser:
@@ -41,11 +47,37 @@ class FileVisualiser:
         if self.size_df is None:
             raise ValueError('Data is not processed. Call process_data() before plotting!')
 
+        images_dir = 'images'
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+
+        print(self.size_df)
+        print(self.size_df.dtypes)
+
+        predictor = FileSizePredictor(self.size_df)
+        predictor.prepare_data()
+        predictor.train_model()
+        next_size, next_date = predictor.predict_next_size()  # possible next values
+
+        # Extend historical data with the predicted point for plotting
+        extended_size_df = self.size_df.concat(self.size_df, pd.DataFrame({
+            'time': next_date,
+            'size': next_size
+        }))
+
         plt.figure(figsize=(12, 6))
-        plt.plot(self.size_df.index, self.size_df['size'], label='File Size')
+        # plt.plot(self.size_df.index, self.size_df['size'], label='Historical File Size', color='blue')
+
+        # Plot predicted data
+        # plt.plot(next_date, next_size, label='Predicted File Size', color='red', linestyle='--', marker='o')
+
+        # Plot historical data
+        plt.plot(self.size_df.index, self.size_df['size'], label='Historical File Size', color='blue')
+        # Plot extended data with prediction to draw the connecting line
+        plt.plot(extended_size_df.index, extended_size_df, label='Prediction', color='red', linestyle='--', marker='o')
 
         plt.xlabel('Date')
-        plt.ylabel('Size')
+        plt.ylabel('File Size')
         plt.title(f'File Size Over Time for {self.file_path}')
         plt.grid(True)
         plt.legend()

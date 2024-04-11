@@ -1,3 +1,5 @@
+import os
+
 from async_database import AsyncDatabase
 
 import pandas as pd
@@ -55,6 +57,10 @@ class CommitVisualiser:
         if self.daily_df is None or self.daily_commit_count_df is None:
             raise ValueError('Data is not processed. Call process_data() before plotting!')
 
+        images_dir = 'images'
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+
         plt.figure(figsize=(12, 6))
 
         for stat in stats_to_plot:
@@ -74,4 +80,4 @@ class CommitVisualiser:
         plt.grid(True)
         plt.legend()
 
-        plt.savefig('images/plot.png')
+        plt.savefig(f'images/plot_{self.collection_name.replace("/", "_")}.png')

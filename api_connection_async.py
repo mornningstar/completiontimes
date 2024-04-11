@@ -28,6 +28,7 @@ class APIConnectionAsync:
         self = APIConnectionAsync(github_repo_username_title)
         self.session = aiohttp.ClientSession()  # Create a session when an instance is created
         await AsyncDatabase.initialize()
+
         return self
 
     @property

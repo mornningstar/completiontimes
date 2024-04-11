@@ -15,15 +15,17 @@ class FileSizePredictor:
         self.sizes_normalised = None
 
     def prepare_data(self):
-        sizes = np.array([record['size'] for record in self.file_history]).reshape(-1, 1)
-        self.sizes_normalized = self.scaler.fit_transform(sizes)
+        sizes = np.array(self.file_history['size']).reshape(-1, 1)
+        #sizes = np.array([record['size'] for record in self.file_history]).reshape(-1, 1)
+        self.sizes_normalised = self.scaler.fit_transform(sizes)
 
-        self.ts_dataset = to_time_series_dataset(sizes_normalized)
+        self.ts_dataset = to_time_series_dataset(self.sizes_normalised)
 
     def train_model(self):
-        if self.ts_dataset is not None and self.sizes_normalized is not None:
+        if self.ts_dataset is not None and self.sizes_normalised is not None:
             X_train = self.ts_dataset[:-1]
-            y_train = self.sizes_normalized[1:].ravel() #Predicting the next size
+            y_train = self.sizes_normalised[1:].ravel()  # Predicting the next size
+            print("TRAINING MODEL")
             self.model.fit(X_train, y_train)
         else:
             raise ValueError("Data has not been prepared. Call prepare_data() before training.")
@@ -31,9 +33,14 @@ class FileSizePredictor:
     def predict_next_size(self):
         if self.ts_dataset is not None:
             last_point = self.ts_dataset[-1].reshape(1, -1, 1)
+            print("PREDICTING NEXT POINT")
             next_size_normalised = self.model.predict(last_point)
-            next_size = self.scaler.inverse_transform(next_size_normalised.reshape(-1, 1))
-            return next_size[0][0]
+            next_size = self.scaler.inverse_transform(next_size_normalised.reshape(-1, 1))[0][0]
+
+            last_date = self.file_history.index[-1]
+            average_interval = (self.file_history.index[-1] - self.file_history.index[0]) / (len(self.file_history.index) - 1)
+            next_date = last_date + average_interval
+
+            return next_size, next_date
         else:
             raise ValueError("Model has not been trained. Call train_model() after prepare_data().")
-
