@@ -57,24 +57,29 @@ class FileVisualiser:
         predictor = FileSizePredictor(self.size_df)
         predictor.prepare_data()
         predictor.train_model()
-        next_size, next_date = predictor.predict_next_size()  # possible next values
+        predicted_sizes, predicted_dates = predictor.predict_next_sizes()
+
+        predicted_df = pd.DataFrame({
+            'size': predicted_sizes
+        }, index=predicted_dates)
 
         # Extend historical data with the predicted point for plotting
-        extended_size_df = self.size_df.concat(self.size_df, pd.DataFrame({
-            'time': next_date,
-            'size': next_size
-        }))
+        extended_size_df = pd.concat([
+            self.size_df,
+            predicted_df
+        ])
 
         plt.figure(figsize=(12, 6))
-        # plt.plot(self.size_df.index, self.size_df['size'], label='Historical File Size', color='blue')
-
-        # Plot predicted data
-        # plt.plot(next_date, next_size, label='Predicted File Size', color='red', linestyle='--', marker='o')
 
         # Plot historical data
         plt.plot(self.size_df.index, self.size_df['size'], label='Historical File Size', color='blue')
-        # Plot extended data with prediction to draw the connecting line
-        plt.plot(extended_size_df.index, extended_size_df, label='Prediction', color='red', linestyle='--', marker='o')
+
+        # Plot predicted data
+        plt.plot(predicted_df.index, predicted_df, label='Prediction', color='red', linestyle='--', marker='o')
+
+        # Plot line from real to predicted data
+        plt.plot([self.size_df.index[-1], predicted_dates[0]], [self.size_df['size'].iloc[-1], predicted_sizes[0]],
+                 color='red', linestyle='--')
 
         plt.xlabel('Date')
         plt.ylabel('File Size')
