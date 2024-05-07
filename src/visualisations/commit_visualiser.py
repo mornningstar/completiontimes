@@ -14,6 +14,11 @@ class CommitVisualiser:
         self.daily_df = None
         self.daily_commit_count_df = None
 
+    async def run(self, stats_to_plot):
+        await self.fetch_data()
+        self.process_data()
+        self.plot_data(stats_to_plot)
+
     async def fetch_data(self):
         self.commit_data = await AsyncDatabase.find(self.collection_name, {})
 

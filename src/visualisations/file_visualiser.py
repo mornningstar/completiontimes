@@ -25,6 +25,11 @@ class FileVisualiser:
         if not os.path.exists(images_dir):
             os.makedirs(images_dir)
 
+    async def run(self):
+        await self.fetch_data()
+        model_info = self.train_and_evaluate_model()
+        self.plot_data(model_info)
+
     async def fetch_data(self):
         query = {"path": self.file_path}
         self.file_data = await AsyncDatabase.find(self.collection_name, query)
@@ -80,6 +85,7 @@ class FileVisualiser:
 
             }
             print(f"Trained {model.__class__.__name__} with MSE: {mse}")
+            print(f"Predictions: {predictions}")
 
         return model_info
 
