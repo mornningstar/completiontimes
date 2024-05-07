@@ -7,7 +7,7 @@ import backoff
 from aiohttp import ClientResponseError
 from requests.utils import parse_header_links
 
-from async_database import AsyncDatabase
+from src.data_handling.async_database import AsyncDatabase
 
 
 class APIConnectionAsync:
@@ -46,7 +46,7 @@ class APIConnectionAsync:
     @staticmethod
     def load_config():
         try:
-            with open('config.json', 'r') as config_file:
+            with open('../../config.json', 'r') as config_file:
                 return json.load(config_file)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}

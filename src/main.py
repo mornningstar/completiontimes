@@ -1,11 +1,15 @@
 import platform
 
-from api_connection_async import APIConnectionAsync
-from commit_visualiser import CommitVisualiser
+from src.data_handling.api_connection_async import APIConnectionAsync
+from src.predictions.statistical_predictions.arima import ARIMAModel
+from src.predictions.statistical_predictions.exponential_smoothing import SimpleExponentialSmoothing
+from src.predictions.statistical_predictions.sarima import SARIMAModel
+from src.visualisations.commit_visualiser import CommitVisualiser
 
 import asyncio
 
-from file_visualiser import FileVisualiser
+from src.visualisations.file_visualiser import FileVisualiser
+
 
 if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -21,11 +25,16 @@ async def main():
     visualiser_KogRob22.process_data()
     visualiser_KogRob22.plot_data(['totals', 'additions', 'deletions'])
 
+    models = [
+        ARIMAModel(),
+        SARIMAModel(),
+        SimpleExponentialSmoothing()]
+
     file_path = 'Abgabe 3/worlds/.humanoid_sprint.wbproj'
-    visualiser_files = FileVisualiser(api_kogrob22.file_tracking_collection, file_path)
+    visualiser_files = FileVisualiser(api_kogrob22.file_tracking_collection, file_path, models)
     await visualiser_files.fetch_data()
-    visualiser_files.process_data()
-    visualiser_files.plot_data()
+    model_info = visualiser_files.train_and_evaluate_model()
+    visualiser_files.plot_data(model_info)
 
 
 # Press the green button in the gutter to run the script.

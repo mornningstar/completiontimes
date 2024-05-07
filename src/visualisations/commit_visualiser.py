@@ -1,6 +1,6 @@
 import os
 
-from async_database import AsyncDatabase
+from src.data_handling.async_database import AsyncDatabase
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -57,7 +57,7 @@ class CommitVisualiser:
         if self.daily_df is None or self.daily_commit_count_df is None:
             raise ValueError('Data is not processed. Call process_data() before plotting!')
 
-        images_dir = 'images'
+        images_dir = '../../images'
         if not os.path.exists(images_dir):
             os.makedirs(images_dir)
 
