@@ -21,10 +21,6 @@ class FileVisualiser:
         self.size_df = None
         self.models = models
 
-        images_dir = '../../images'
-        if not os.path.exists(images_dir):
-            os.makedirs(images_dir)
-
     async def run(self):
         await self.fetch_data()
         model_info = self.train_and_evaluate_model()
@@ -93,6 +89,10 @@ class FileVisualiser:
         if self.size_df is None:
             raise ValueError('Data is not processed. Call process_data() before plotting!')
 
+        images_dir = 'images'
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+
         plt.figure(figsize=(12, 6))
 
         # Plot historical data
@@ -131,4 +131,4 @@ class FileVisualiser:
         plt.grid(True)
         plt.legend()
 
-        plt.savefig(f'images/plot_{self.file_path.replace("/", "_")}.png')
+        plt.savefig(f'{images_dir}/plot_{self.file_path.replace("/", "_")}.png')

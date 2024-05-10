@@ -53,8 +53,10 @@ class CommitVisualiser:
             'commit_counts': commit_counts
         })
 
-        df.sort_values(by='time', inplace=True)
         df.set_index('time', inplace=True)
+        df.index = pd.DatetimeIndex(df.index)
+        df.sort_values(by='time', inplace=True)
+
         self.daily_df = df.resample('D').sum()
         self.daily_commit_count_df = df.resample('D').count()['commit_counts']
 
@@ -62,7 +64,7 @@ class CommitVisualiser:
         if self.daily_df is None or self.daily_commit_count_df is None:
             raise ValueError('Data is not processed. Call process_data() before plotting!')
 
-        images_dir = '../../images'
+        images_dir = 'images'
         if not os.path.exists(images_dir):
             os.makedirs(images_dir)
 
@@ -85,4 +87,4 @@ class CommitVisualiser:
         plt.grid(True)
         plt.legend()
 
-        plt.savefig(f'images/plot_{self.collection_name.replace("/", "_")}.png')
+        plt.savefig(f'{images_dir}/plot_{self.collection_name.replace("/", "_")}.png')

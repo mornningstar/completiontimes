@@ -16,23 +16,31 @@ if platform.system() == 'Windows':
 
 
 async def main():
-    vyvytn_KogRob22 = 'vyvytn/KogRob22'
-    api_kogrob22 = await APIConnectionAsync.create(vyvytn_KogRob22)
-    await api_kogrob22.populate_db()
+    ohmyzsh_project = 'ohmyzsh/ohmyzsh'
+    ohmyzsh_api = await APIConnectionAsync.create(ohmyzsh_project)
 
-    visualiser_KogRob22 = CommitVisualiser(api_kogrob22.full_commit_info_collection)
-    await visualiser_KogRob22.run(['totals', 'additions', 'deletions'])
+    try:
+        #await ohmyzsh_api.populate_db()
 
-    models = [
-        ARIMAModel(),
-        SARIMAModel(),
-        SimpleExponentialSmoothing()]
+        visualiser_ohmyzsh = CommitVisualiser(ohmyzsh_api.full_commit_info_collection)
+        await visualiser_ohmyzsh.run(['totals', 'additions', 'deletions'])
 
-    file_path = 'Abgabe 3/worlds/.humanoid_sprint.wbproj'
-    visualiser_files = FileVisualiser(api_kogrob22.file_tracking_collection, file_path, models)
-    await visualiser_files.run()
+        models = [
+            ARIMAModel(),
+            SimpleExponentialSmoothing()]
 
+        file_paths = [
+            'plugins/heroku/_heroku',
+            'plugins/ubuntu/ubuntu.plugin.zsh',
+            'plugins/mercurial/mercurial.plugin.zsh'
+        ]
 
+        for file_path in file_paths:
+            visualiser_files = FileVisualiser(ohmyzsh_api.file_tracking_collection, file_path, models)
+            await visualiser_files.run()
+
+    finally:
+        await ohmyzsh_api.close_session()
 
 
 # Press the green button in the gutter to run the script.

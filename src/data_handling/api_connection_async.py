@@ -46,7 +46,7 @@ class APIConnectionAsync:
     @staticmethod
     def load_config():
         try:
-            with open('../../config.json', 'r') as config_file:
+            with open('config.json', 'r') as config_file:
                 return json.load(config_file)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
@@ -123,9 +123,6 @@ class APIConnectionAsync:
 
         return response, file_paths
 
-    """
-    Objective: 
-    """
     async def batch_get_commit_info(self, batch_size=200):
         commit_info_list = []
         file_paths_set = set()
