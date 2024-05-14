@@ -9,12 +9,15 @@ class SimpleExponentialSmoothing(BaseModel):
         super().__init__()
         self.model = None
 
-    def train(self, X_train, Y_train=None):
-        self.model = SimpleExpSmoothing(X_train, initialization_method='estimated').fit()
+    def train(self, x_train, y_train=None):
+        self.model = SimpleExpSmoothing(x_train, initialization_method='estimated').fit()
 
     def predict(self, steps):
         return self.model.forecast(steps=steps)
 
-    def evaluate(self, y_test, X_test=None):
+    def evaluate(self, y_test, x_test=None):
         predictions = self.predict(len(y_test))
         return predictions, mean_squared_error(y_test, predictions)
+
+
+

@@ -3,7 +3,11 @@ from itertools import cycle
 
 import matplotlib
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+
+from src.predictions.machine_learning.decision_tree import DecisionTreeModel
 
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -55,30 +59,53 @@ class FileVisualiser:
         self.size_df = df
 
     def prepare_data(self, test_size=0.2):
+        """
+        Prepares the data for visualisation.
+        :param test_size: Percentage of data to be used for testing
+        :return:
+            x_train: timestamps of train datatest,
+            x_test: timestamps of test dataset,
+            y_train: file sizes of train dataset,
+            y_test: file sizes of test dataset
+        """
         self.size_df.sort_index(inplace=True)
 
         train_size = 1 - test_size
-        X_train, X_test = train_test_split(self.size_df, train_size=train_size, shuffle=False)
-        return X_train, X_test
+        train, test = train_test_split(self.size_df, train_size=train_size, shuffle=False)
+
+        x_train = train.index.astype(int).values.reshape(-1, 1)
+        y_train = train['size']
+
+        x_test = test.index.astype(int).values.reshape(-1, 1)
+        y_test = test['size']
+
+        print("Variance in y_train:", y_train.var())
+
+        return x_train, y_train, x_test, y_test
 
     def train_and_evaluate_model(self):
-        X_train, X_test = self.prepare_data()
-
+        x_train, y_train, x_test, y_test = self.prepare_data()
         model_info = {}
+
         for model in self.models:
             # Only call auto_tune() when the model class has this method
             if hasattr(model, 'auto_tune'):
-                model.auto_tune(X_train['size'])
+                model.auto_tune(y_train)
 
-            model.train(X_train['size'])
-            predictions, mse = model.evaluate(X_test['size'])
+            if isinstance(model, DecisionTreeModel):
+                model.train(x_train, y_train)
+            else:
+                model.train(y_train)
+            #model.train(x_train['size'], y_train)
+            predictions, mse = model.evaluate(y_test, x_test)
 
             model_info[model.__class__.__name__] = {
                 'mse': mse,
                 'predictions': predictions,
-                'X_test': X_test,
-                'X_train': X_train
-
+                'x_train': x_train,
+                'y_train': y_train,
+                'x_test': x_test,
+                'y_test': y_test
             }
             print(f"Trained {model.__class__.__name__} with MSE: {mse}")
             print(f"Predictions: {predictions}")
@@ -103,14 +130,20 @@ class FileVisualiser:
         color_cycle = cycle(colors)
 
         for model_name, info in model_info.items():
-            last_train_point = info['X_train']['size'].iloc[-1]  # Get last training point size
-            last_train_date = info['X_train'].index[-1]  # Get last training point date
+            x_train_dates = pd.to_datetime(info['x_train'].flatten())
+            x_test_dates = pd.to_datetime(info['x_test'].flatten())
 
-            prediction_dates = info['X_test'].index
+            last_train_point = info['y_train'].iloc[-1]  # Get last training point size
+            last_train_date = x_train_dates[-1]  # Get last training point date
+
+            if isinstance(info['predictions'], pd.Series):
+                predictions = info['predictions'].values
+            else:
+                predictions = info['predictions']
 
             predicted_df = pd.DataFrame({
-                'size': info['predictions'].values,
-            }, index=prediction_dates)
+                'size': predictions#info['predictions'].values,
+            }, index=x_test_dates)
 
             current_colour = next(color_cycle)
 
@@ -121,8 +154,9 @@ class FileVisualiser:
 
             if not predicted_df.empty:
                 first_pred_size = predicted_df.iloc[0]['size']
-                # Ensure you plot a line between the last training point and the first predicted point
-                plt.plot([last_train_date, prediction_dates[0]], [last_train_point, first_pred_size],
+
+                # Plot a line between the last training point and the first predicted point
+                plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_size],
                          color=current_colour, linestyle='--')
 
         plt.xlabel('Date')

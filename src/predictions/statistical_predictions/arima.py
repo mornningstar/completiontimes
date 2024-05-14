@@ -34,6 +34,5 @@ class ARIMAModel(BaseModel):
         return self.fitted_model.forecast(steps=steps)
 
     def evaluate(self, y_test, X_test=None):
-
         predictions = self.predict(len(y_test))
         return predictions, mean_squared_error(y_test, predictions)

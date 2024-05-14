@@ -174,40 +174,44 @@ class APIConnectionAsync:
 
     async def get_file_commit_history(self, file_path):
         url = f'{self.get_commits_url}?path={file_path}'
-        commits, _ = await self.make_request(url)
 
-        if not commits:
-            print(f'No commit history has been found for {file_path}')
-            return
+        while url:
+            commits, headers = await self.make_request(url)
 
-        commit_history = []
+            if not commits:
+                print(f'No commit history has been found for {file_path}')
+                break
 
-        for commit in commits:
-            sha = commit['sha']
-            commit_date = commit['commit']['author']['date']
-            size_or_status = await self.get_file_size_at_commit(file_path, sha)
+            commit_history = []
 
-            if size_or_status == 'file_not_found':
-                commit_details = await self.get_commit_details(commit['sha'])
-                if await self.is_file_deleted_in_commit(commit_details, file_path):
-                    size_or_status = 0  # DELETED
-                    print("DELETED")
-                else:
-                    print("NOT DELETED.")
+            for commit in commits:
+                sha = commit['sha']
+                commit_date = commit['commit']['author']['date']
+                size_or_status = await self.get_file_size_at_commit(file_path, sha)
 
-            commit_history.append({
-                'sha': sha,
-                'date': commit_date,
-                'size': size_or_status
+                if size_or_status == 'file_not_found':
+                    commit_details = await self.get_commit_details(commit['sha'])
+                    if await self.is_file_deleted_in_commit(commit_details, file_path):
+                        size_or_status = 0  # DELETED
+                        print("DELETED")
+                    else:
+                        print("NOT DELETED.")
+
+                commit_history.append({
+                    'sha': sha,
+                    'date': commit_date,
+                    'size': size_or_status
+                })
+
+            data = {
+                'path': file_path,
+                'commit_history': commit_history
             }
-            )
 
-        data = {
-            'path': file_path,
-            'commit_history': commit_history
-        }
+            await AsyncDatabase.insert_many(self.file_tracking_collection, [data], data_type='files')
 
-        await AsyncDatabase.insert_many(self.file_tracking_collection, [data], data_type='files')
+            # Get the next page URL from headers if available
+            url = await self.get_next_link(headers)
 
     async def iterate_over_file_paths(self):
         files = await AsyncDatabase.fetch_all(self.file_tracking_collection)
