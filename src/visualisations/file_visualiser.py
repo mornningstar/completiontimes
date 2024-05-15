@@ -79,7 +79,10 @@ class FileVisualiser:
         x_test = test.index.astype(int).values.reshape(-1, 1)
         y_test = test['size']
 
-        print("Variance in y_train:", y_train.var())
+        print("First 5 entries in x_train:", x_train[:5])  # Debug statement
+        print("First 5 entries in y_train:", y_train[:5])  # Debug statement
+        print("First 5 entries in x_test:", x_test[:5])  # Debug statement
+        print("First 5 entries in y_test:", y_test[:5])  # Debug statement
 
         return x_train, y_train, x_test, y_test
 

@@ -1,5 +1,6 @@
+from matplotlib import pyplot as plt
 from sklearn.metrics import mean_squared_error
-from sklearn.tree import DecisionTreeRegressor
+from sklearn.tree import DecisionTreeRegressor, plot_tree
 
 from src.predictions.base_model import BaseModel
 

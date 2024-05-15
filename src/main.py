@@ -33,34 +33,6 @@ async def process_project(project):
 async def main():
     tasks = [process_project(project) for project in PROJECTS]
     await asyncio.gather(*tasks)
-    # ohmyzsh_project = 'ohmyzsh/ohmyzsh'
-    # ohmyzsh_api = await APIConnectionAsync.create(ohmyzsh_project)
-    #
-    # try:
-    #     await ohmyzsh_api.populate_db()
-    #
-    #     visualiser_ohmyzsh = CommitVisualiser(ohmyzsh_api.full_commit_info_collection)
-    #     await visualiser_ohmyzsh.run(['totals', 'additions', 'deletions'])
-    #
-    #     models = [
-    #         ARIMAModel(),
-    #         SimpleExponentialSmoothing(),
-    #         DecisionTreeModel()
-    #     ]
-    #
-    #     file_paths = [
-    #         'plugins/heroku/_heroku',
-    #         'plugins/ubuntu/ubuntu.plugin.zsh',
-    #         'plugins/mercurial/mercurial.plugin.zsh'
-    #     ]
-    #
-    #     for file_path in file_paths:
-    #         visualiser_files = FileVisualiser(ohmyzsh_api.file_tracking_collection, file_path, models)
-    #         await visualiser_files.run()
-    #
-    # finally:
-    #     await ohmyzsh_api.close_session()
-
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':

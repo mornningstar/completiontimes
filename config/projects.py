@@ -13,7 +13,7 @@ PROJECTS = [
         'models': [
             ARIMAModel(),
             SimpleExponentialSmoothing(),
-            DecisionTreeModel(max_depth=50),
+            DecisionTreeModel(max_depth=1),
         ],
         'file_paths': [
             'plugins/heroku/_heroku',
