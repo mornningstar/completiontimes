@@ -5,7 +5,7 @@ class BaseModel:
     def __init__(self, model=None):
         self.model = model
 
-    def train(self, x_train, y_train=None):
+    def train(self, x_train, y_train):
         if y_train is not None:
             self.model.fit(x_train, y_train)
         else:
@@ -14,6 +14,6 @@ class BaseModel:
     def predict(self, x_test):
         return self.model.predict(x_test)
 
-    def evaluate(self, y_test, x_test=None):
+    def evaluate(self, y_test, x_test):
         predictions = self.predict(x_test)
-        return mean_squared_error(y_true=y_test, y_pred=predictions)
+        return predictions, mean_squared_error(y_true=y_test, y_pred=predictions)

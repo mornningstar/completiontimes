@@ -79,11 +79,6 @@ class FileVisualiser:
         x_test = test.index.astype(int).values.reshape(-1, 1)
         y_test = test['size']
 
-        print("First 5 entries in x_train:", x_train[:5])  # Debug statement
-        print("First 5 entries in y_train:", y_train[:5])  # Debug statement
-        print("First 5 entries in x_test:", x_test[:5])  # Debug statement
-        print("First 5 entries in y_test:", y_test[:5])  # Debug statement
-
         return x_train, y_train, x_test, y_test
 
     def train_and_evaluate_model(self):
@@ -95,11 +90,7 @@ class FileVisualiser:
             if hasattr(model, 'auto_tune'):
                 model.auto_tune(y_train)
 
-            if isinstance(model, DecisionTreeModel):
-                model.train(x_train, y_train)
-            else:
-                model.train(y_train)
-            #model.train(x_train['size'], y_train)
+            model.train(x_train, y_train)
             predictions, mse = model.evaluate(y_test, x_test)
 
             model_info[model.__class__.__name__] = {
