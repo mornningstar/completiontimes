@@ -173,9 +173,10 @@ class APIConnectionAsync:
         return False
 
     async def get_file_commit_history(self, file_path):
-        url = f'{self.get_commits_url}?path={file_path}'
+        url = f'{self.get_commits_url}?path={file_path}&per_page={APIConnectionAsync.RESULTS_PER_PAGE}'
 
         while url:
+            print("Fetching URL: ", url)  # Debugging statement
             commits, headers = await self.make_request(url)
 
             if not commits:
@@ -212,6 +213,7 @@ class APIConnectionAsync:
 
             # Get the next page URL from headers if available
             url = await self.get_next_link(headers)
+            print("Next URL: ", url)  # Debugging statement
 
     async def iterate_over_file_paths(self):
         files = await AsyncDatabase.fetch_all(self.file_tracking_collection)

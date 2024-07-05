@@ -4,21 +4,19 @@ from src.predictions.statistical_predictions.exponential_smoothing import Simple
 
 PROJECTS = [
     {
-        'name': 'ohmyzsh/ohmyzsh',
-        'commit_views': [
-            'totals',
-            'additions',
-            'deletions',
+        'name': 'khoj-ai/khoj',
+        'modeling': [
+            'repo_size'
         ],
         'models': [
-            ARIMAModel(),
-            SimpleExponentialSmoothing(),
-            DecisionTreeModel(max_depth=1),
+            #ARIMAModel(),
+            #SimpleExponentialSmoothing(),
+            #DecisionTreeModel(max_depth=1),
         ],
         'file_paths': [
-            'plugins/heroku/_heroku',
-            'plugins/ubuntu/ubuntu.plugin.zsh',
-            'plugins/mercurial/mercurial.plugin.zsh',
+        #    'plugins/heroku/_heroku',
+        #    'plugins/ubuntu/ubuntu.plugin.zsh',
+        #    'plugins/mercurial/mercurial.plugin.zsh',
         ]
     },
 ]

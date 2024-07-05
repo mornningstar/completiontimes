@@ -33,10 +33,7 @@ class FileDataHandler:
             'size': sizes
         }).set_index('time').sort_values('time')
 
-        #df.sort_values(by='time', inplace=True)
-        #df.set_index('time', inplace=True)
         df.index = pd.DatetimeIndex(df.index)
-
         self.size_df = df
 
     def prepare_data(self, test_size=0.2):

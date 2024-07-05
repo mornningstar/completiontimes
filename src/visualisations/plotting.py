@@ -1,18 +1,94 @@
 import os
 from itertools import cycle
 
+import numpy as np
 import pandas as pd
+import seaborn as sns
 from matplotlib import pyplot as plt
 
 
 class Plotter:
-    def __init__(self, images_dir='images'):
+    def __init__(self, collection_name=None, images_dir='images', ):
         self.images_dir = images_dir
+        self.collection_name = collection_name
 
         if not os.path.exists(self.images_dir):
             os.makedirs(self.images_dir)
 
-    def plot(self, size_df, model_info, file_path):
+    def plot(self, df, title, ylabel):
+        plt.figure(figsize=(12, 6))
+
+        plt.plot(df.index, df.iloc[:, 0], marker='o', linestyle='-')
+        plt.title(f'{title} for {self.collection_name}')
+        plt.xlabel('Time')
+        plt.ylabel(ylabel)
+        plt.grid(True)
+
+        plt.savefig(f'{self.images_dir}/plot_{self.collection_name.replace("/", "_")}.png')
+
+    def plot_cooccurrence_matrix(self, cooccurrence_df):
+        plt.figure(figsize=(20, 16))
+        sns.set(font_scale=0.8)
+        sns.heatmap(cooccurrence_df, cmap='coolwarm', annot=False, square=True)
+        plt.title('File Co-occurrence Matrix')
+        plt.xticks(rotation=90)
+        plt.yticks(rotation=0)
+        plt.tight_layout()
+
+        plt.savefig(f'{self.images_dir}/plot_coocurrence_matrix.png')
+
+    def plot_proximity_matrix(self, proximity_df):
+        proximity_pivot = proximity_df.pivot_table(index="file1", columns="file2", values="distance")
+
+
+        plt.figure(figsize=(20, 16))
+        sns.set(font_scale=0.8)
+        sns.heatmap(proximity_pivot, cmap='coolwarm', annot=False, square=True)
+        plt.title('File Directory Proximity Matrix')
+        plt.xticks(rotation=90)
+        plt.yticks(rotation=0)
+        plt.tight_layout()
+
+        plt.savefig(f'{self.images_dir}/plot_proximity_matrix.png')
+
+    def plot_proximity_histogram(self, proximity_df):
+        plt.figure(figsize=(10, 6))
+        sns.histplot(proximity_df['distance'], bins=30, kde=False)
+        plt.title('Distribution of File Directory Distances')
+        plt.xlabel('Directory Distance')
+        plt.ylabel('Frequency')
+        plt.tight_layout()
+
+        plt.savefig(f'{self.images_dir}/plot_proximity_histogram.png')
+
+    def plot_distance_vs_cooccurrence(self, combined_df):
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(data=combined_df, x='distance', y='cooccurrence')
+        plt.title('Directory Distance vs. Co-occurrence')
+        plt.xlabel('Directory Distance')
+        plt.ylabel('Co-occurrence')
+        plt.tight_layout()
+
+        plt.savefig(f'{self.images_dir}/plot_distance_vs_cooccurrence.png')
+
+    def plot_commits(self, data, stats_to_plot):
+        plt.figure(figsize=(12, 6))
+
+        for stat in stats_to_plot:
+            if stat in data.columns:
+                plt.plot(data.index, data[stat], label=stat.capitalize())
+            else:
+                raise ValueError(f'Stat {stat} does not exist in the data.')
+
+        plt.xlabel('Date')
+        plt.ylabel('Count')
+        plt.title('Changes Over Time')
+        plt.grid(True)
+        plt.legend()
+
+        plt.savefig(f'{self.images_dir}/plot_{self.collection_name.replace("/", "_")}.png')
+
+    def plot_predictions(self, size_df, model_info, file_path):
         plt.figure(figsize=(12, 6))
 
         plt.plot(size_df.index, size_df['size'], label='Historical File Size', linestyle='-', marker='o', color='blue')
@@ -27,10 +103,8 @@ class Plotter:
             last_train_point = info['y_train'].iloc[-1]
             last_train_date = x_train_dates[-1]
 
-            if isinstance(info['predictions'], pd.Series):
-                predictions = info['predictions'].values
-            else:
-                predictions = info['predictions']
+            predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
+                'predictions']
 
             predicted_df = pd.DataFrame({'size': predictions}, index=x_test_dates)
 
@@ -42,7 +116,6 @@ class Plotter:
 
             if not predicted_df.empty:
                 first_pred_size = predicted_df.iloc[0]['size']
-
                 plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_size], color=current_colour,
                          linestyle='--')
 
