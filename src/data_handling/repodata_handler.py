@@ -6,12 +6,12 @@ from src.visualisations.plotting import Plotter
 
 
 class RepoDataHandler:
-    def __init__(self, collection_name, modeling_tasks):
-        self.collection_name = collection_name
+    def __init__(self, api_connection, modeling_tasks):
+        self.api_connection = api_connection
         self.modeling_tasks = modeling_tasks
 
         # Currently only used for other commit stats
-        self.plotter = Plotter(collection_name=self.collection_name.full_commit_info_collection)
+        self.plotter = Plotter(project_name=self.api_connection.full_commit_info_collection)
 
         self.commit_data = None
         self.commits_df = None
@@ -21,7 +21,7 @@ class RepoDataHandler:
         self.process_data()
 
     async def fetch_data(self):
-        self.commit_data = await AsyncDatabase.find(self.collection_name.full_commit_info_collection, {})
+        self.commit_data = await AsyncDatabase.find(self.api_connection.full_commit_info_collection, {})
 
     def process_data(self):
         times = []
@@ -64,7 +64,7 @@ class RepoDataHandler:
         commit_stats_to_plot = [task for task in self.modeling_tasks if task != 'repo_size']
 
         if 'repo_size' in self.modeling_tasks:
-            reposize_handler = RepoSizeHandler(self.collection_name.file_tracking_collection)
+            reposize_handler = RepoSizeHandler(self.api_connection.file_tracking_collection)
             await reposize_handler.fetch_repository_sizes(self.commit_data)
             reposize_handler.plot_repository_size()
 

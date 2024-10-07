@@ -6,7 +6,8 @@ PROJECTS = [
     {
         'name': 'khoj-ai/khoj',
         'modeling': [
-            'repo_size'
+            'repo_size',
+            'totals'
         ],
         'models': [
             #ARIMAModel(),

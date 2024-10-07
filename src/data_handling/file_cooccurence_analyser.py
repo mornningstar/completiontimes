@@ -8,10 +8,10 @@ from src.visualisations.plotting import Plotter
 
 
 class FileCooccurenceAnalyser:
-    def __init__(self, commit_data):
+    def __init__(self, commit_data, project_name):
         self.commit_data = commit_data
 
-        self.plotter = Plotter()
+        self.plotter = Plotter(project_name=project_name)
 
         self.cooccurence_matrix = defaultdict(lambda: defaultdict(int))
         self.cooccurence_df = None
@@ -38,6 +38,7 @@ class FileCooccurenceAnalyser:
             self.cooccurence_matrix[file][file] = 0  # Ensure diagonal is zero
 
         self.cooccurence_df = pd.DataFrame(self.cooccurence_matrix).fillna(0)
+        self.cooccurence_df = (self.cooccurence_df + self.cooccurence_df.T) / 2  # Ensure symmetry
 
     def calculate_directory_proximity(self):
         def directory_depth(file_path):

@@ -25,9 +25,9 @@ async def process_project(project):
         if modeling_tasks:
             repodata_handling = RepoDataHandler(api_connection, modeling_tasks)
             await repodata_handling.run()
-            #await repodata_handling.plot()
+            await repodata_handling.plot()
 
-            cooccurrence_analyser = FileCooccurenceAnalyser(repodata_handling.commit_data)
+            cooccurrence_analyser = FileCooccurenceAnalyser(repodata_handling.commit_data, project_name)
             cooccurrence_analyser.run()
             cooccurrence_analyser.plot()
 
