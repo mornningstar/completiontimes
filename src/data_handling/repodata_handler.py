@@ -5,6 +5,40 @@ from src.data_handling.repository_size_handling import RepoSizeHandler
 from src.visualisations.plotting import Plotter
 
 
+def add_features(dataframe, time_col='time', count_col='commits', additions_col='additions',
+                 deletions_col='deletions', window=7):
+
+    dataframe[time_col] = pd.to_datetime(dataframe[time_col])
+    dataframe.set_index(time_col, inplace=True)
+
+    # A moving average of commit counts
+    dataframe[f'rolling_{window}_commit_count'] = dataframe[count_col].rolling(window=window).mean()
+
+    # A moving average for commit additions
+    dataframe[f'rolling_{window}_additions'] = dataframe[additions_col].rolling(window=window).mean()
+
+    # A moving average for commit deletions
+    dataframe[f'rolling_{window}_deletions'] = dataframe[deletions_col].rolling(window=window).mean()
+
+    # Cumulative changes
+    dataframe['cumulative_additions'] = dataframe[additions_col].cumsum()
+    dataframe['cumulative_deletions'] = dataframe[deletions_col].cumsum()
+    dataframe['cumulative_net_changes'] = dataframe['cumulative_additions'] - dataframe['cumulative_deletions']
+
+    dataframe['additions_to_deletions_ratio'] = dataframe[additions_col] / dataframe[deletions_col].replace(0, 1)
+
+    dataframe['commit_rate'] = dataframe[count_col].rolling(window=window).sum() / window
+
+    dataframe[f'lag_{window}_commit_count'] = dataframe[count_col].shift(window)
+    dataframe[f'lag_{window}_additions'] = dataframe[additions_col].shift(window)
+    dataframe[f'lag_{window}_deletions'] = dataframe[deletions_col].shift(window)
+
+    dataframe['day_of_week'] = dataframe.index.day_of_week
+    dataframe['month_of_year'] = dataframe.index.month
+
+    return dataframe
+
+
 class RepoDataHandler:
     def __init__(self, api_connection, modeling_tasks):
         self.api_connection = api_connection
@@ -57,8 +91,10 @@ class RepoDataHandler:
         df.set_index('time', inplace=True)
         df.index = pd.DatetimeIndex(df.index)
         df.sort_values(by='time', inplace=True)
-
         self.commits_df = df.resample('D').sum()
+
+        self.commits_df = add_features(self.commits_df, time_col='time', count_col='commits',
+                                       additions_col='additions', deletions_col='deletions')
 
     async def plot(self):
         commit_stats_to_plot = [task for task in self.modeling_tasks if task != 'repo_size']

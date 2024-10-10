@@ -19,4 +19,4 @@ class FileVisualiser:
         await self.data_handler.fetch_data()
         x_train, y_train, x_test, y_test = self.data_handler.prepare_data()
         model_info = self.model_trainer.train_and_evaluate_model(x_train, y_train, x_test, y_test)
-        self.plotter.plot(self.data_handler.size_df, model_info, self.file_path)
+        self.plotter.plot_predictions(self.data_handler.size_df, model_info, self.file_path)
