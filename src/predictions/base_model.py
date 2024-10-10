@@ -1,4 +1,4 @@
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 
 class BaseModel:
@@ -16,4 +16,8 @@ class BaseModel:
 
     def evaluate(self, y_test, x_test):
         predictions = self.predict(x_test)
-        return predictions, mean_squared_error(y_true=y_test, y_pred=predictions)
+
+        mse = mean_squared_error(y_true=y_test, y_pred=predictions)
+        mae = mean_absolute_error(y_true=y_test, y_pred=predictions)
+
+        return predictions, mse, mae, mse ** 0.5

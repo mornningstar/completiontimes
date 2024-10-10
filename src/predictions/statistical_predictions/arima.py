@@ -1,4 +1,4 @@
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 import pmdarima as pm
 
 from src.predictions.base_model import BaseModel
@@ -22,7 +22,7 @@ class ARIMAModel(BaseModel):
 
     def train(self, x_train, y_train):
         if not self.model:
-            self.model = ARIMA(y_train, order=(1,1,1))
+            self.model = ARIMA(y_train, order=(1, 1, 1))
         else:
             # Use auto-tune parameters
             self.model = ARIMA(y_train, order=self.model.order)
@@ -31,7 +31,3 @@ class ARIMAModel(BaseModel):
 
     def predict(self, steps):
         return self.model.forecast(steps=steps)
-
-    def evaluate(self, y_test, x_test):
-        predictions = self.predict(len(x_test))
-        return predictions, mean_squared_error(y_test, predictions)

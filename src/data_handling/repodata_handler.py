@@ -8,8 +8,8 @@ from src.visualisations.plotting import Plotter
 def add_features(dataframe, time_col='time', count_col='commits', additions_col='additions',
                  deletions_col='deletions', window=7):
 
-    dataframe[time_col] = pd.to_datetime(dataframe[time_col])
-    dataframe.set_index(time_col, inplace=True)
+    #dataframe[time_col] = pd.to_datetime(dataframe[time_col])
+    #dataframe.set_index(time_col, inplace=True)
 
     # A moving average of commit counts
     dataframe[f'rolling_{window}_commit_count'] = dataframe[count_col].rolling(window=window).mean()
