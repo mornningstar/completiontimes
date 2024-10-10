@@ -12,9 +12,13 @@ class CommitVisualiser:
         self.data_handler = RepoDataHandler(api_connection, self.models, self.modeling_tasks)
         self.model_trainer = ModelTrainer(self.models, modeling_tasks=self.modeling_tasks)
 
+        self.commits = None
+
     async def run(self):
         await self.data_handler.run()
         data_splits = self.data_handler.prepare_data()
+
+        self.commits = self.data_handler.commit_data
 
         for task, (x_train, y_train, x_test, y_test) in data_splits.items():
             print(f"Training and evaluating model for {task}")

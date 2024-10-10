@@ -28,9 +28,11 @@ async def process_project(project):
             await commit_visualiser.run()
             #await repodata_handling.plot()
 
-            #cooccurrence_analyser = FileCooccurenceAnalyser(repodata_handling.commit_data, project_name)
-            #cooccurrence_analyser.run()
+            cooccurrence_analyser = FileCooccurenceAnalyser(commit_visualiser.commits, project_name)
+            cooccurrence_analyser.run()
             #cooccurrence_analyser.plot()
+
+            #cooccurrence_analyser.plot_hierarchical_cooccurrence()
 
         if file_paths:
             for file_path in file_paths:

@@ -2,7 +2,11 @@ import os
 from collections import defaultdict
 from itertools import combinations
 
+import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
+from scipy.cluster.hierarchy import linkage, dendrogram
+from scipy.spatial.distance import squareform
 
 from src.visualisations.plotting import Plotter
 
@@ -38,6 +42,7 @@ class FileCooccurenceAnalyser:
         self.build_cooccurrence_matrix()
         self.calculate_directory_proximity()
         self.combine_proximity_cooccurrence()
+        self.plot_hierarchical_cooccurrence()
 
     def build_cooccurrence_matrix(self):
         for commit in self.commit_data:
@@ -117,3 +122,20 @@ class FileCooccurenceAnalyser:
         self.plotter.plot_proximity_histogram(self.proximity_df)
         self.plotter.plot_distance_vs_cooccurrence(self.combined_df)
         self.plotter.plot_zipf_distribution(self.cooccurrence_df)
+
+    def plot_hierarchical_cooccurrence(self):
+        max_cooccurrence = self.cooccurrence_df.values.max()
+        normalized_cooccurrence = self.cooccurrence_df.fillna(0) / max_cooccurrence
+        distance_matrix = 1 - normalized_cooccurrence
+
+        np.fill_diagonal(distance_matrix.values, 0)
+
+        linked = linkage(squareform(distance_matrix), method='ward')
+
+        plt.figure(figsize=(12, 8))
+        dendrogram(linked, labels=self.cooccurrence_df.index, orientation='right', leaf_font_size=8)
+        plt.title("File Clustering Dendrogram")
+        plt.xlabel("Distance")
+        plt.ylabel("Files")
+
+        self.plotter.save_plot('hierarchical_cooccurrence.png')

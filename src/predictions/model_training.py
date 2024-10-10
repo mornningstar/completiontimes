@@ -13,6 +13,9 @@ class ModelTrainer:
             # Only call auto_tune() when the model class has this method
             if hasattr(model, 'auto_tune'):
                 model.auto_tune(y_train)
+            if hasattr(model, 'param_grid'):
+                params = model.grid_search(x_train, y_train)
+                print(f"Best params for {model.__class__.__name__}: {params}")
 
             model.train(x_train, y_train)
             predictions, mse, mae, rmse = model.evaluate(y_test, x_test)
