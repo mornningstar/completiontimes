@@ -1,15 +1,14 @@
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 from src.data_handling.async_database import AsyncDatabase
 from src.data_handling.repository_size_handling import RepoSizeHandler
+from src.predictions.model_training import ModelTrainer
 from src.visualisations.plotting import Plotter
 
 
 def add_features(dataframe, time_col='time', count_col='commits', additions_col='additions',
                  deletions_col='deletions', window=7):
-
-    #dataframe[time_col] = pd.to_datetime(dataframe[time_col])
-    #dataframe.set_index(time_col, inplace=True)
 
     # A moving average of commit counts
     dataframe[f'rolling_{window}_commit_count'] = dataframe[count_col].rolling(window=window).mean()
@@ -33,15 +32,16 @@ def add_features(dataframe, time_col='time', count_col='commits', additions_col=
     dataframe[f'lag_{window}_additions'] = dataframe[additions_col].shift(window)
     dataframe[f'lag_{window}_deletions'] = dataframe[deletions_col].shift(window)
 
-    dataframe['day_of_week'] = dataframe.index.day_of_week
-    dataframe['month_of_year'] = dataframe.index.month
+    #dataframe['day_of_week'] = dataframe.index.day_of_week
+    #dataframe['month_of_year'] = dataframe.index.month
 
     return dataframe
 
 
 class RepoDataHandler:
-    def __init__(self, api_connection, modeling_tasks):
+    def __init__(self, api_connection, models, modeling_tasks):
         self.api_connection = api_connection
+        self.model_trainer = ModelTrainer(models, modeling_tasks=modeling_tasks)
         self.modeling_tasks = modeling_tasks
 
         # Currently only used for other commit stats
@@ -91,10 +91,36 @@ class RepoDataHandler:
         df.set_index('time', inplace=True)
         df.index = pd.DatetimeIndex(df.index)
         df.sort_values(by='time', inplace=True)
-        self.commits_df = df.resample('D').sum()
+        self.commits_df = df.resample('W').sum()
+
+        self.commits_df.index = self.commits_df.index.tz_localize(None)
 
         self.commits_df = add_features(self.commits_df, time_col='time', count_col='commits',
                                        additions_col='additions', deletions_col='deletions')
+
+    def prepare_data(self, test_size=0.2):
+        self.commits_df.sort_index(inplace=True)
+
+        data_splits = {}
+
+        for task in self.modeling_tasks:
+            if task in self.commits_df.columns:
+                train_size = 1 - test_size
+                train, test = train_test_split(self.commits_df[task], train_size=train_size, shuffle=False)
+
+                # Convert index to integer timestamps for model compatibility
+                x_train = train.index.astype(int).values.reshape(-1, 1)
+                y_train = train.values
+
+                x_test = test.index.astype(int).values.reshape(-1, 1)
+                y_test = test.values
+
+                data_splits[task] = (x_train, y_train, x_test, y_test)
+
+            else:
+                raise ValueError(f"Task '{task}' is not a valid column in the data.")
+
+        return data_splits
 
     async def plot(self):
         commit_stats_to_plot = [task for task in self.modeling_tasks if task != 'repo_size']

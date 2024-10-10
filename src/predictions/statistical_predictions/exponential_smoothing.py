@@ -1,4 +1,4 @@
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from src.predictions.base_model import BaseModel
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
@@ -16,7 +16,8 @@ class SimpleExponentialSmoothing(BaseModel):
 
     def evaluate(self, y_test, x_test):
         predictions = self.predict(len(x_test))
-        return predictions, mean_squared_error(y_test, predictions)
 
+        mse = mean_squared_error(y_true=y_test, y_pred=predictions)
+        mae = mean_absolute_error(y_true=y_test, y_pred=predictions)
 
-
+        return predictions, mse, mae, mse ** 0.5

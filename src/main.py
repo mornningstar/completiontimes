@@ -5,6 +5,7 @@ from config.projects import PROJECTS
 from src.data_handling.api_connection_async import APIConnectionAsync
 from src.data_handling.file_cooccurence_analyser import FileCooccurenceAnalyser
 from src.data_handling.repodata_handler import RepoDataHandler
+from src.visualisations.commit_visualiser import CommitVisualiser
 from src.visualisations.file_visualiser import FileVisualiser
 
 if platform.system() == 'Windows':
@@ -23,13 +24,13 @@ async def process_project(project):
         #await api_connection.populate_db()
 
         if modeling_tasks:
-            repodata_handling = RepoDataHandler(api_connection, modeling_tasks)
-            await repodata_handling.run()
-            await repodata_handling.plot()
+            commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
+            await commit_visualiser.run()
+            #await repodata_handling.plot()
 
-            cooccurrence_analyser = FileCooccurenceAnalyser(repodata_handling.commit_data, project_name)
-            cooccurrence_analyser.run()
-            cooccurrence_analyser.plot()
+            #cooccurrence_analyser = FileCooccurenceAnalyser(repodata_handling.commit_data, project_name)
+            #cooccurrence_analyser.run()
+            #cooccurrence_analyser.plot()
 
         if file_paths:
             for file_path in file_paths:

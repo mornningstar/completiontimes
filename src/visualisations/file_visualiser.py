@@ -11,7 +11,7 @@ class FileVisualiser:
     def __init__(self, collection_name, file_path, models):
         self.data_handler = FileDataHandler(collection_name, file_path)
         self.model_trainer = ModelTrainer(models)
-        self.plotter = Plotter(collection_name=collection_name)
+        self.plotter = Plotter(project_name=collection_name)
 
         self.file_path = file_path
 

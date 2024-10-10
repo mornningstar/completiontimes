@@ -158,6 +158,44 @@ class Plotter:
 
         self.save_plot("commits.png")
 
+    def plot_commit_predictions(self, commits_df, model_info, task):
+
+        plt.figure(figsize=(12, 6))
+
+        plt.plot(commits_df.index, commits_df[task], label=f'Historical {task.capitalize()}', linestyle='-', marker='o',
+                 color='blue')
+
+        colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        color_cycle = cycle(colors)
+
+        for model_name, info in model_info.items():
+            x_train_dates = pd.to_datetime(info['x_train'].flatten()).tz_localize(None)
+            x_test_dates = pd.to_datetime(info['x_test'].flatten()).tz_localize(None)
+
+            predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
+                'predictions']
+            predicted_df = pd.DataFrame({task: predictions}, index=x_test_dates)
+
+            current_colour = next(color_cycle)
+
+            plt.plot(predicted_df.index, predicted_df[task],
+                     label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, '
+                           f'RMSE: {info["rmse"]:.2f})', linestyle='--', marker='o', color=current_colour)
+
+            last_actual_date = x_train_dates[-1]
+            last_actual_value = commits_df[task].loc[last_actual_date]
+            first_pred_value = predicted_df.iloc[0][task]
+            plt.plot([last_actual_date, x_test_dates[0]], [last_actual_value, first_pred_value], color=current_colour,
+                     linestyle='--')
+
+        plt.xlabel('Date')
+        plt.ylabel('Value')
+        plt.title(f'{task.capitalize()} Over Time with Forecast')
+        plt.grid(True)
+        plt.legend()
+
+        self.save_plot(f'commit_predictions_{task}.png')
+
     def plot_predictions(self, size_df, model_info, file_path):
         plt.figure(figsize=(12, 6))
 

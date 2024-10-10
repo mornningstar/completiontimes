@@ -15,8 +15,8 @@ class ARIMAModel(BaseModel):
         self.order = None
 
     def auto_tune(self, x_train):
-        self.model = pm.auto_arima(x_train, start_p=0, start_q=0, max_p=3, max_q=3, max_f=1, seasonal=False,
-                                   stepwise=True, D=1, max_D=1, trace=True)
+        self.model = pm.auto_arima(x_train, start_p=0, start_q=0, max_p=5, max_q=4,
+                                   d=0, max_d=2, seasonal=False, stepwise=True)
         print(self.model.summary())
         self.order = self.model.order
 
@@ -31,3 +31,12 @@ class ARIMAModel(BaseModel):
 
     def predict(self, steps):
         return self.model.forecast(steps=steps)
+
+    def evaluate(self, y_test, x_test):
+        steps = len(x_test)
+        predictions = self.predict(steps)
+
+        mse = mean_squared_error(y_true=y_test, y_pred=predictions)
+        mae = mean_absolute_error(y_true=y_test, y_pred=predictions)
+
+        return predictions, mse, mae, mse ** 0.5
