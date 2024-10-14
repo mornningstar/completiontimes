@@ -7,9 +7,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
-from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from kneed import KneeLocator
 
 from src.data_handling.cluster_analyser import ClusterAnalyser
 from src.visualisations.plotting import Plotter
@@ -38,23 +36,23 @@ class FileCooccurenceAnalyser:
         self.plotter = Plotter(project_name=project_name)
 
         self.cooccurence_matrix = defaultdict(lambda: defaultdict(int))
-        self.cooccurrence_df = None
-        self.cooccurrence_categorized_df = None
-        self.proximity_df = None
-        self.combined_df = None
 
     def run(self):
-        self.build_cooccurrence_matrix()
-        self.calculate_directory_proximity()
-        self.combine_proximity_cooccurrence()
-        self.plot_hierarchical_cooccurrence()
-        self.get_combined_data_matrix()
+        cooccurrence_categorized_df, cooccurrence_df = self.build_cooccurrence_matrix()
+        proximity_df = self.calculate_directory_proximity(cooccurrence_df)
+        combined_df = self.combine_proximity_cooccurrence(proximity_df, cooccurrence_df)
 
-        cluster_analyser = ClusterAnalyser(self.combined_df, self.plotter)
-        cluster_analyser.find_optimal_clusters()  # Automatically sets self.optimal_k
-        cluster_analyser.run_clustering_analysis()  # Runs clustering and analysis with optimal k
+        self.plot(cooccurrence_df, cooccurrence_categorized_df, proximity_df, combined_df)
+        self.plot_hierarchical_cooccurrence(cooccurrence_df)
+
+        self.get_combined_data_matrix(combined_df)
+
+        cluster_analyser = ClusterAnalyser(combined_df, self.plotter)
+        cluster_analyser.find_optimal_clusters()
+        cluster_analyser.run_clustering_analysis()
 
     def build_cooccurrence_matrix(self):
+
         for commit in self.commit_data:
             try:
                 files = [file['filename'] for file in commit['files']]
@@ -68,15 +66,18 @@ class FileCooccurenceAnalyser:
         for file in all_files:
             self.cooccurence_matrix[file][file] = 0  # Ensure diagonal is zero
 
-        self.cooccurrence_df = pd.DataFrame(self.cooccurence_matrix).fillna(0)
-        self.cooccurrence_df = (self.cooccurrence_df + self.cooccurrence_df.T) / 2  # Ensure symmetry
+        cooccurrence_df = pd.DataFrame(self.cooccurence_matrix).fillna(0)
+        cooccurrence_df = (cooccurrence_df + cooccurrence_df.T) / 2  # Ensure symmetry
 
         # Prepare a categorized matrix for plotting
-        max_cooccurrence = self.cooccurrence_df.values.max()
-        self.cooccurrence_categorized_df = self.cooccurrence_df.apply(
+        max_cooccurrence = cooccurrence_df.values.max()
+
+        cooccurrence_categorized_df = cooccurrence_df.apply(
             lambda col: col.map(lambda x: categorise(x, max_cooccurrence)))
 
-    def calculate_directory_proximity(self):
+        return cooccurrence_categorized_df, cooccurrence_df
+
+    def calculate_directory_proximity(self, cooccurrence_df):
         def directory_depth(file_path):
             return file_path.count(os.sep)
 
@@ -86,8 +87,8 @@ class FileCooccurenceAnalyser:
 
         proximity_data = []
 
-        for file1 in self.cooccurrence_df.index:
-            for file2 in self.cooccurrence_df.columns:
+        for file1 in cooccurrence_df.index:
+            for file2 in cooccurrence_df.columns:
                 if file1 != file2:
                     file1_depth = directory_depth(file1)
                     file2_depth = directory_depth(file2)
@@ -101,19 +102,19 @@ class FileCooccurenceAnalyser:
                         'distance': distance
                     })
 
-        self.proximity_df = pd.DataFrame(proximity_data)
+        return pd.DataFrame(proximity_data)
 
-    def combine_proximity_cooccurrence(self):
+    def combine_proximity_cooccurrence(self, proximity_df, cooccurrence_df):
         combined_data = []
-        max_cooccurrence = self.cooccurrence_df.values.max()
-        max_distance = self.proximity_df['distance'].max()
+        max_cooccurrence = cooccurrence_df.values.max()
+        max_distance = proximity_df['distance'].max()
 
-        for _, row in self.proximity_df.iterrows():
+        for _, row in proximity_df.iterrows():
             file1 = row['file1']
             file2 = row['file2']
             distance = row['distance']
-            cooccurrence = self.cooccurrence_df.at[
-                file1, file2] if file1 in self.cooccurrence_df.index and file2 in self.cooccurrence_df.columns else 0
+            cooccurrence = cooccurrence_df.at[
+                file1, file2] if file1 in cooccurrence_df.index and file2 in cooccurrence_df.columns else 0
 
             combined_data.append({
                 'file1': file1,
@@ -124,23 +125,25 @@ class FileCooccurenceAnalyser:
                 'cooccurrence_level': categorise(cooccurrence, max_cooccurrence)
             })
 
-        self.combined_df = pd.DataFrame(combined_data)
+        combined_df = pd.DataFrame(combined_data)
 
         scaler = StandardScaler()
-        self.combined_df[['cooccurrence_scaled', 'distance_scaled']] = scaler.fit_transform(
-            self.combined_df[['cooccurrence', 'distance']]
+        combined_df[['cooccurrence_scaled', 'distance_scaled']] = scaler.fit_transform(
+            combined_df[['cooccurrence', 'distance']]
         )
 
-    def plot(self):
-        self.plotter.plot_cooccurrence_matrix(self.cooccurrence_categorized_df, top_n_files=15)
-        self.plotter.plot_proximity_matrix(self.proximity_df)
-        self.plotter.plot_proximity_histogram(self.proximity_df)
-        self.plotter.plot_distance_vs_cooccurrence(self.combined_df)
-        self.plotter.plot_zipf_distribution(self.cooccurrence_df)
+        return combined_df
 
-    def plot_hierarchical_cooccurrence(self):
-        max_cooccurrence = self.cooccurrence_df.values.max()
-        normalized_cooccurrence = self.cooccurrence_df.fillna(0) / max_cooccurrence
+    def plot(self, cooccurrence_df, cooccurrence_categorized_df, proximity_df, combined_df):
+        self.plotter.plot_cooccurrence_matrix(cooccurrence_categorized_df, top_n_files=15)
+        self.plotter.plot_proximity_matrix(proximity_df)
+        self.plotter.plot_proximity_histogram(proximity_df)
+        self.plotter.plot_distance_vs_cooccurrence(combined_df)
+        self.plotter.plot_zipf_distribution(cooccurrence_df)
+
+    def plot_hierarchical_cooccurrence(self, cooccurrence_df):
+        max_cooccurrence = cooccurrence_df.values.max()
+        normalized_cooccurrence = cooccurrence_df.fillna(0) / max_cooccurrence
         distance_matrix = 1 - normalized_cooccurrence
 
         np.fill_diagonal(distance_matrix.values, 0)
@@ -148,15 +151,15 @@ class FileCooccurenceAnalyser:
         linked = linkage(squareform(distance_matrix), method='ward')
 
         plt.figure(figsize=(12, 8))
-        dendrogram(linked, labels=self.cooccurrence_df.index, orientation='right', leaf_font_size=8)
+        dendrogram(linked, labels=cooccurrence_df.index, orientation='right', leaf_font_size=8)
         plt.title("File Clustering Dendrogram")
         plt.xlabel("Distance")
         plt.ylabel("Files")
 
         self.plotter.save_plot('hierarchical_cooccurrence.png')
 
-    def get_combined_data_matrix(self):
-        matrix = (self.combined_df[['cooccurrence_level', 'distance_level']]
+    def get_combined_data_matrix(self, combined_df):
+        matrix = (combined_df[['cooccurrence_level', 'distance_level']]
                   .groupby(['cooccurrence_level', 'distance_level']).size().unstack(fill_value=0))
 
         x_order = ['Low', 'Middle', 'High']
