@@ -20,7 +20,8 @@ class CommitVisualiser:
 
         self.commits = self.data_handler.commit_data
 
-        for task, (x_train, y_train, x_test, y_test) in data_splits.items():
-            print(f"Training and evaluating model for {task}")
-            model_info = self.model_trainer.train_and_evaluate_model(x_train, y_train, x_test, y_test)
-            self.plotter.plot_commit_predictions(self.data_handler.commits_df, model_info, task)
+        if self.models:
+            for task, (x_train, y_train, x_test, y_test) in data_splits.items():
+                print(f"Training and evaluating model for {task}")
+                model_info = self.model_trainer.train_and_evaluate_model(x_train, y_train, x_test, y_test)
+                self.plotter.plot_commit_predictions(self.data_handler.commits_df, model_info, task)

@@ -43,6 +43,7 @@ class FileCooccurenceAnalyser:
         self.calculate_directory_proximity()
         self.combine_proximity_cooccurrence()
         self.plot_hierarchical_cooccurrence()
+        self.get_combined_data_matrix()
 
     def build_cooccurrence_matrix(self):
         for commit in self.commit_data:
@@ -139,3 +140,13 @@ class FileCooccurenceAnalyser:
         plt.ylabel("Files")
 
         self.plotter.save_plot('hierarchical_cooccurrence.png')
+
+    def get_combined_data_matrix(self):
+        matrix = (self.combined_df[['cooccurrence_level', 'distance_level']]
+                  .groupby(['cooccurrence_level', 'distance_level']).size().unstack(fill_value=0))
+
+        x_order = ['Low', 'Middle', 'High']
+        y_order = ['High', 'Middle', 'Low']
+        matrix = matrix.reindex(index=y_order, columns=x_order, fill_value=0)
+
+        self.plotter.plot_distance_vs_cooccurrence_matrix(matrix)

@@ -141,6 +141,15 @@ class Plotter:
 
         self.save_plot("distance_vs_cooccurrence.png")
 
+    def plot_distance_vs_cooccurrence_matrix(self, matrix):
+        plt.figure(figsize=(6, 6))
+        sns.heatmap(matrix, annot=True, fmt="d", cmap="coolwarm", cbar=False, linewidths=.5)
+        plt.xlabel("Directory Distance Level")
+        plt.ylabel("Co-occurrence Level")
+        plt.title("Co-occurrence vs. Directory Distance Matrix")
+
+        self.save_plot('matrix.png')
+
     def plot_commits(self, data, stats_to_plot):
         plt.figure(figsize=(12, 6))
 

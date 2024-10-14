@@ -13,7 +13,7 @@ PROJECTS = [
         'models': [
             #ARIMAModel(),
             #SARIMAModel()
-            ExponentialSmoothingModel(trend='add', seasonal='add', seasonal_periods=7),
+            #ExponentialSmoothingModel(trend='add', seasonal='add', seasonal_periods=7),
             #DecisionTreeModel(grid_search=True),
         ],
         'file_paths': [
