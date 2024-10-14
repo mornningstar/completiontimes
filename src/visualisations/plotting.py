@@ -243,3 +243,22 @@ class Plotter:
         plt.legend()
 
         self.save_plot(f'predictions_{file_path.replace("/", "_")}.png')
+
+    def plot_clusters(self, combined_df):
+        """
+        Creates scatter plot of all data points, coloured by clusters
+        :param combined_df:
+        :return:
+        """
+        plt.figure(figsize=(10, 8))
+        plt.scatter(
+            combined_df['cooccurrence_scaled'],
+            combined_df['distance_scaled'],
+            c=combined_df['cluster'],
+            cmap='viridis'
+        )
+        plt.xlabel('Co-occurrence (scaled)')
+        plt.ylabel('Distance (scaled)')
+        plt.title('File Pair Clustering by Co-occurrence and Distance')
+        plt.colorbar(label='Cluster')
+        self.save_plot('clusters.png')

@@ -7,7 +7,11 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from kneed import KneeLocator
 
+from src.data_handling.cluster_analyser import ClusterAnalyser
 from src.visualisations.plotting import Plotter
 
 
@@ -28,6 +32,7 @@ class FileCooccurenceAnalyser:
         :param project_name: Name of the project
         """
 
+        self.optimal_k = None
         self.commit_data = commit_data
 
         self.plotter = Plotter(project_name=project_name)
@@ -44,6 +49,10 @@ class FileCooccurenceAnalyser:
         self.combine_proximity_cooccurrence()
         self.plot_hierarchical_cooccurrence()
         self.get_combined_data_matrix()
+
+        cluster_analyser = ClusterAnalyser(self.combined_df, self.plotter)
+        cluster_analyser.find_optimal_clusters()  # Automatically sets self.optimal_k
+        cluster_analyser.run_clustering_analysis()  # Runs clustering and analysis with optimal k
 
     def build_cooccurrence_matrix(self):
         for commit in self.commit_data:
@@ -116,6 +125,11 @@ class FileCooccurenceAnalyser:
             })
 
         self.combined_df = pd.DataFrame(combined_data)
+
+        scaler = StandardScaler()
+        self.combined_df[['cooccurrence_scaled', 'distance_scaled']] = scaler.fit_transform(
+            self.combined_df[['cooccurrence', 'distance']]
+        )
 
     def plot(self):
         self.plotter.plot_cooccurrence_matrix(self.cooccurrence_categorized_df, top_n_files=15)

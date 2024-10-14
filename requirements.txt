@@ -12,3 +12,7 @@ tslearn~=0.6.3
 statsmodels~=0.14.2
 scikit-learn~=1.4.2
 tslearn~=0.6.3
+pmdarima~=2.0.4
+scipy~=1.12.0
+kneed~=0.8.5
+seaborn~=0.13.2
