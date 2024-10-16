@@ -32,9 +32,6 @@ def add_features(dataframe, time_col='time', count_col='commits', additions_col=
     dataframe[f'lag_{window}_additions'] = dataframe[additions_col].shift(window)
     dataframe[f'lag_{window}_deletions'] = dataframe[deletions_col].shift(window)
 
-    #dataframe['day_of_week'] = dataframe.index.day_of_week
-    #dataframe['month_of_year'] = dataframe.index.month
-
     return dataframe
 
 
@@ -90,18 +87,37 @@ class RepoDataHandler:
 
         df.set_index('time', inplace=True)
         df.index = pd.DatetimeIndex(df.index)
-        df.sort_values(by='time', inplace=True)
-        self.commits_df = df.resample('W').sum()
+        df.sort_index(inplace=True)
+
+        df = df.groupby(df.index.date).sum()
+        df.index = pd.to_datetime(df.index)
+
+        #self.commits_df = df.resample('D').sum()
+        self.commits_df = df.resample('D').asfreq()
+
+        self.commits_df.ffill(inplace=True)
+        self.commits_df.bfill(inplace=True)
 
         self.commits_df.index = self.commits_df.index.tz_localize(None)
 
         self.commits_df = add_features(self.commits_df, time_col='time', count_col='commits',
                                        additions_col='additions', deletions_col='deletions')
 
-    def prepare_data(self, test_size=0.2):
+    async def prepare_data(self, test_size=0.2):
         self.commits_df.sort_index(inplace=True)
 
         data_splits = {}
+
+        if 'repo_size' in self.modeling_tasks:
+            reposize_handler = RepoSizeHandler(self.api_connection.file_tracking_collection)
+            await reposize_handler.fetch_repository_sizes(self.commit_data)
+
+            self.commits_df = self.commits_df.merge(
+                reposize_handler.repo_size_df, how='left', left_index=True, right_index=True
+            )
+
+        self.commits_df.ffill(inplace=True)
+        self.commits_df.bfill(inplace=True)
 
         for task in self.modeling_tasks:
             if task in self.commits_df.columns:
@@ -128,6 +144,7 @@ class RepoDataHandler:
         if 'repo_size' in self.modeling_tasks:
             reposize_handler = RepoSizeHandler(self.api_connection.file_tracking_collection)
             await reposize_handler.fetch_repository_sizes(self.commit_data)
+
             reposize_handler.plot_repository_size()
 
         if commit_stats_to_plot:

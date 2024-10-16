@@ -16,7 +16,7 @@ class CommitVisualiser:
 
     async def run(self):
         await self.data_handler.run()
-        data_splits = self.data_handler.prepare_data()
+        data_splits = await self.data_handler.prepare_data()
 
         self.commits = self.data_handler.commit_data
 

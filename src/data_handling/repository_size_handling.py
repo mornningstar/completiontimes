@@ -36,9 +36,10 @@ class RepoSizeHandler:
             for file_path, commit_history in file_commit_map.items():
                 for file_commit in commit_history:
                     if file_commit['sha'] == commit_sha:
-                        size = file_commit.get('size', 0)
+                        size = file_commit.get('size', None)
                         if size == 'file_not_found':
-                            current_file_sizes[file_path] = 0
+                            #current_file_sizes[file_path] = 0
+                            current_file_sizes.pop(file_path, None)
                         else:
                             current_file_sizes[file_path] = size
                         break
@@ -47,7 +48,14 @@ class RepoSizeHandler:
             repo_size = sum(current_file_sizes.values())
             repo_sizes.append({'time': commit_date, 'repo_size': repo_size})
 
-        self.repo_size_df = pd.DataFrame(repo_sizes).set_index('time').resample('D').sum().ffill()
+        repo_size_df = pd.DataFrame(repo_sizes)#.set_index('time').resample('D').ffill()
+        repo_size_df = repo_size_df.groupby('time').sum()
+
+        # Make dataframe time-zone naive
+        repo_size_df.index = repo_size_df.index.tz_convert(None)
+
+        self.repo_size_df = repo_size_df.resample('D').ffill()
+        self.repo_size_df = self.repo_size_df[self.repo_size_df['repo_size'] > 0]
 
     def plot_repository_size(self):
         self.plotter.plot(self.repo_size_df, title="Repository Size Over Time", ylabel="Size (bytes)")

@@ -36,7 +36,7 @@ class FileDataHandler:
         df.set_index('time', inplace=True)
         df.index = pd.DatetimeIndex(df.index)
         df.sort_values(by='time', inplace=True)
-        self.size_df = df.resample('D').sum()
+        self.size_df = df.resample('D').ffill()
 
     def prepare_data(self, test_size=0.2):
         """
@@ -49,6 +49,8 @@ class FileDataHandler:
             y_test: file sizes of test dataset
         """
         self.size_df.sort_index(inplace=True)
+
+        self.size_df.dropna(subset=['size'], inplace=True)
 
         train_size = 1 - test_size
         train, test = train_test_split(self.size_df, train_size=train_size, shuffle=False)

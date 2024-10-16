@@ -30,9 +30,6 @@ async def process_project(project):
 
             cooccurrence_analyser = FileCooccurenceAnalyser(commit_visualiser.commits, project_name)
             cooccurrence_analyser.run()
-            cooccurrence_analyser.plot()
-
-            #cooccurrence_analyser.plot_hierarchical_cooccurrence()
 
         if file_paths:
             for file_path in file_paths:

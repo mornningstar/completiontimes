@@ -7,17 +7,18 @@ PROJECTS = [
     {
         'name': 'khoj-ai/khoj',
         'modeling': [
-            'totals',
-            'cumulative_net_changes'
+            #'totals',
+            'cumulative_net_changes',
+            #'repo_size'
         ],
         'models': [
-            #ARIMAModel(),
-            #SARIMAModel()
-            #ExponentialSmoothingModel(trend='add', seasonal='add', seasonal_periods=7),
-            #DecisionTreeModel(grid_search=True),
+            ARIMAModel(),
+            SARIMAModel(),
+            ExponentialSmoothingModel(trend='add', seasonal='add', seasonal_periods=7),
+            DecisionTreeModel(grid_search=True),
         ],
         'file_paths': [
-            #'src/khoj/routers/web_client.py'
+            'src/khoj/routers/web_client.py'
         ]
     },
 ]

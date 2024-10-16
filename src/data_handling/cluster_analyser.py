@@ -95,3 +95,11 @@ class ClusterAnalyser:
         summary_df.to_csv('cluster_summary.csv')
 
         return summary_df
+
+    def extract_features(self):
+        features_list = []
+
+        for file in self.df_for_clustering['file1'].unique():
+            cluster = self.df_for_clustering.loc[self.df_for_clustering['file1'] == file, 'cluster'].values[0]
+            co_occurrence = self.df_for_clustering.loc[self.df_for_clustering['file1'] == file, 'cooccurrence'].sum()
+

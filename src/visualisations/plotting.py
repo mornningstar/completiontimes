@@ -171,7 +171,9 @@ class Plotter:
 
         plt.figure(figsize=(12, 6))
 
-        plt.plot(commits_df.index, commits_df[task], label=f'Historical {task.capitalize()}', linestyle='-', marker='o',
+        commits_df = commits_df[commits_df[task] > 0]
+
+        plt.plot(commits_df.index, commits_df[task], label=f'Historical {task.capitalize()}', linestyle='-',
                  color='blue')
 
         colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
@@ -189,13 +191,7 @@ class Plotter:
 
             plt.plot(predicted_df.index, predicted_df[task],
                      label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, '
-                           f'RMSE: {info["rmse"]:.2f})', linestyle='--', marker='o', color=current_colour)
-
-            last_actual_date = x_train_dates[-1]
-            last_actual_value = commits_df[task].loc[last_actual_date]
-            first_pred_value = predicted_df.iloc[0][task]
-            plt.plot([last_actual_date, x_test_dates[0]], [last_actual_value, first_pred_value], color=current_colour,
-                     linestyle='--')
+                           f'RMSE: {info["rmse"]:.2f})', linestyle='-', color=current_colour)
 
         plt.xlabel('Date')
         plt.ylabel('Value')
@@ -208,7 +204,8 @@ class Plotter:
     def plot_predictions(self, size_df, model_info, file_path):
         plt.figure(figsize=(12, 6))
 
-        plt.plot(size_df.index, size_df['size'], label='Historical File Size', linestyle='-', marker='o', color='blue')
+        #plt.plot(size_df.index, size_df['size'], label='Historical File Size', linestyle='-', color='blue')
+        plt.step(size_df.index, size_df['size'], label='Historical File Size', color='blue', linestyle='solid')
 
         colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
         color_cycle = cycle(colors)
@@ -228,13 +225,13 @@ class Plotter:
             current_colour = next(color_cycle)
 
             plt.plot(predicted_df.index, predicted_df['size'],
-                     label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f})', linestyle='--', marker='o',
+                     label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f})', linestyle='-',
                      color=current_colour)
 
             if not predicted_df.empty:
                 first_pred_size = predicted_df.iloc[0]['size']
                 plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_size], color=current_colour,
-                         linestyle='--')
+                         linestyle='-')
 
         plt.xlabel('Date')
         plt.ylabel('File Size')
