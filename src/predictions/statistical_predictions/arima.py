@@ -1,5 +1,6 @@
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import pmdarima as pm
+from statsmodels.tsa.stattools import adfuller
 
 from src.predictions.base_model import BaseModel
 from statsmodels.tsa.arima.model import ARIMA
@@ -14,9 +15,29 @@ class ARIMAModel(BaseModel):
         self.fitted_model = None
         self.order = None
 
-    def auto_tune(self, x_train):
-        self.model = pm.auto_arima(x_train, start_p=0, start_q=0, max_p=5, max_q=4,
-                                   d=0, max_d=2, seasonal=False, stepwise=True)
+    def adf_test(self, y_train):
+        """
+        Run the augmented Dickey-Fuller Test to test for stationary. With this info, we tune the d parameter
+        :param y_train:
+        :return:
+        """
+        result = adfuller(y_train)
+        p_value = result[1]
+        return p_value <= 0.05  # If p-value <= 0.05, data is stationary
+
+    def auto_tune(self, y_train):
+        stationary = self.adf_test(y_train)
+        if not stationary:
+            d = 1  # Apply differencing if not stationary
+        else:
+            d = 0  # No differencing needed
+
+        self.model = pm.auto_arima(y_train,
+                                   start_p=0, max_p=5,
+                                   start_q=0, max_q=4,
+                                   d=d,
+                                   seasonal=False,
+                                   stepwise=True)
         print(self.model.summary())
         self.order = self.model.order
 
@@ -32,8 +53,8 @@ class ARIMAModel(BaseModel):
     def predict(self, steps):
         return self.model.forecast(steps=steps)
 
-    def evaluate(self, y_test, x_test):
-        steps = len(x_test)
+    def evaluate(self, x_test, y_test):
+        steps = len(y_test)
         predictions = self.predict(steps)
 
         mse = mean_squared_error(y_true=y_test, y_pred=predictions)

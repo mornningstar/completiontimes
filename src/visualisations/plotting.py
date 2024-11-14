@@ -78,15 +78,55 @@ class Plotter:
         self.save_plot("cooccurrence_matrix.png")
 
     def plot_zipf_distribution(self, cooccurrence_df):
-        file_pairs = [(i, j) for i in cooccurrence_df.index for j in cooccurrence_df.columns]
+        """file_pairs = [(min(i), max(j)) for i in cooccurrence_df.index for j in cooccurrence_df.columns]
         cooccurrence_values = cooccurrence_df.values.flatten()
-        cooccurrence_data = pd.DataFrame({'FilePair': file_pairs, 'Cooccurrence': cooccurrence_values})
+
+        unique_pairs = list(set(file_pairs))
+
+        cooccurrence_data = pd.DataFrame({'FilePair': unique_pairs, 'Cooccurrence': cooccurrence_values})
 
         cooccurrence_data['FilePair'] = cooccurrence_data['FilePair'].apply(lambda x: f"{x[0]}, {x[1]}")
 
         cooccurrence_data = cooccurrence_data[cooccurrence_data['Cooccurrence'] > 0].sort_values(
             by='Cooccurrence', ascending=False)
 
+        plt.figure(figsize=(12, 6))
+        sns.barplot(data=cooccurrence_data.head(20), x='Cooccurrence', y='FilePair', hue='FilePair', dodge=False)
+        plt.title('Zipf\'s Law for File Co-occurrence')
+        plt.xlabel('Co-occurrence Count')
+        plt.ylabel('File Pairs')
+        plt.tight_layout()
+
+        self.save_plot("zipf_distribution.png")"""
+        cooccurrence_dict = {}
+
+        for i in cooccurrence_df.index:
+            for j in cooccurrence_df.columns:
+                if i != j:
+                    # Ensure (i, j) and (j, i) are considered the same by ordering
+                    pair = tuple(sorted((i, j)))
+                    cooccurrence_value = cooccurrence_df.loc[i, j]
+
+                    # Add to dictionary, summing values for duplicate pairs
+                    if pair in cooccurrence_dict:
+                        cooccurrence_dict[pair] += cooccurrence_value
+                    else:
+                        cooccurrence_dict[pair] = cooccurrence_value
+
+        # Convert the dictionary to a DataFrame
+        unique_pairs = list(cooccurrence_dict.keys())
+        cooccurrence_values = list(cooccurrence_dict.values())
+
+        cooccurrence_data = pd.DataFrame({'FilePair': unique_pairs, 'Cooccurrence': cooccurrence_values})
+
+        # Format FilePair for plotting
+        cooccurrence_data['FilePair'] = cooccurrence_data['FilePair'].apply(lambda x: f"{x[0]}, {x[1]}")
+
+        # Filter for non-zero co-occurrences and sort by descending order
+        cooccurrence_data = cooccurrence_data[cooccurrence_data['Cooccurrence'] > 0].sort_values(
+            by='Cooccurrence', ascending=False)
+
+        # Plot the data
         plt.figure(figsize=(12, 6))
         sns.barplot(data=cooccurrence_data.head(20), x='Cooccurrence', y='FilePair', hue='FilePair', dodge=False)
         plt.title('Zipf\'s Law for File Co-occurrence')
@@ -167,31 +207,77 @@ class Plotter:
 
         self.save_plot("commits.png")
 
-    def plot_commit_predictions(self, commits_df, model_info, task):
-
+    def plot_lstm_predictions(self, commits_df, model_info, task):
         plt.figure(figsize=(12, 6))
 
-        commits_df = commits_df[commits_df[task] > 0]
+        # Extract LSTMModel predictions from the model_info
+        lstm_info = model_info['LSTMModel']
+        predictions = lstm_info['predictions']
+        x_train = lstm_info['x_train']
+        y_train = lstm_info['y_train']
+        y_test = lstm_info['y_test']
+
+        # Ensure predictions and y_test are aligned
+        assert len(predictions) == len(y_test), "Predictions and y_test must have the same length."
+
+        # Plot the full actual data from commits_df
+        plt.plot(commits_df.index, commits_df[task], label="Actual Values", color='blue')
+
+        # Plot only the predictions for the test portion
+        prediction_dates = commits_df.index[-len(y_test):]  # Get the dates corresponding to the test set
+        plt.plot(prediction_dates, predictions, label="LSTMModel Predictions", color='red')
+
+        # Plot the connection between the last x_train value and the first prediction
+        last_train_date = commits_df.index[len(x_train) - 1]
+        last_train_value = y_train[-1]
+        first_prediction_value = predictions[0].item()
+        first_prediction_date = prediction_dates[0]
+
+        # Plot the line connecting the last train point to the first prediction point
+        plt.plot([last_train_date, first_prediction_date], [last_train_value, first_prediction_value], color='red',
+                 linestyle='--')
+
+        plt.title(f'LSTMModel Predictions vs Actual Values ({task})')
+        plt.xlabel('Date')
+        plt.ylabel('Value')
+        plt.legend()
+        plt.grid(True)
+
+        self.save_plot(f'lstm_predictions_{task}.png')
+
+    def plot_commit_predictions(self, commits_df, model_info, task):
+        plt.figure(figsize=(12, 6))
+        #commits_df = commits_df[commits_df[task] > 0]
 
         plt.plot(commits_df.index, commits_df[task], label=f'Historical {task.capitalize()}', linestyle='-',
-                 color='blue')
+                color='blue')
 
         colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
         color_cycle = cycle(colors)
 
         for model_name, info in model_info.items():
-            x_train_dates = pd.to_datetime(info['x_train'].flatten()).tz_localize(None)
-            x_test_dates = pd.to_datetime(info['x_test'].flatten()).tz_localize(None)
+            if info['x_test'] is None:
+                # Use the time index from commits_df for ARIMA/SARIMA models
+                prediction_start_index = commits_df.index[-len(info['y_test']):]
+            else:
+                prediction_start_index = pd.to_datetime(info['x_test']).tz_localize(None)
 
-            predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
-                'predictions']
-            predicted_df = pd.DataFrame({task: predictions}, index=x_test_dates)
+            predictions = info['predictions']
+            predicted_df = pd.DataFrame({task: predictions.flatten()}, index=prediction_start_index)
 
             current_colour = next(color_cycle)
 
             plt.plot(predicted_df.index, predicted_df[task],
-                     label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, '
-                           f'RMSE: {info["rmse"]:.2f})', linestyle='-', color=current_colour)
+                    label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, '
+                        f'RMSE: {info["rmse"]:.2f})', linestyle='-', color=current_colour)
+
+            # Plot the last training point connected to the first prediction point
+            last_train_date = commits_df.index[len(commits_df) - len(info['y_test']) - 1]
+            last_train_value = commits_df[task].iloc[-len(info['y_test']) - 1]
+            first_prediction_value = predictions.flatten()[0]
+
+            plt.plot([last_train_date, prediction_start_index[0]],
+                     [last_train_value, first_prediction_value], color=current_colour, linestyle='--')
 
         plt.xlabel('Date')
         plt.ylabel('Value')
@@ -204,7 +290,6 @@ class Plotter:
     def plot_predictions(self, size_df, model_info, file_path):
         plt.figure(figsize=(12, 6))
 
-        #plt.plot(size_df.index, size_df['size'], label='Historical File Size', linestyle='-', color='blue')
         plt.step(size_df.index, size_df['size'], label='Historical File Size', color='blue', linestyle='solid')
 
         colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']

@@ -9,9 +9,9 @@ class DecisionTreeModel(BaseModel):
         super().__init__(DecisionTreeRegressor(max_depth=max_depth))
         if grid_search:
             self.param_grid = {
-                'max_depth': [1, 3, 5, 10, 15, 20, 25, 30, 100, 1000, None],
-                'min_samples_split': [2, 5, 10, 20],
-                'min_samples_leaf': [1, 2, 5, 10]
+                'max_depth': [1, 3, 5, 10, 15, 20, 30],
+                'min_samples_split': [5, 10, 20, 50],
+                'min_samples_leaf': [5, 10, 20]
             }
 
     def grid_search(self, x_train, y_train):

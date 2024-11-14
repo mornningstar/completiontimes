@@ -33,7 +33,7 @@ async def process_project(project):
 
         if file_paths:
             for file_path in file_paths:
-                visualiser_files = FileVisualiser(api_connection.file_tracking_collection, file_path, models)
+                visualiser_files = FileVisualiser(project_name, file_path, models)
                 await visualiser_files.run()
 
     finally:

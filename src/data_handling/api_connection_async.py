@@ -57,7 +57,8 @@ class APIConnectionAsync:
     @backoff.on_exception(backoff.expo,
                           aiohttp.ClientError,
                           max_tries=4,
-                          giveup=lambda e: e.status == 400)
+                          giveup=lambda e: hasattr(e, 'status') and e.status == 400
+                          )
     async def make_request(self, url):
         async with self.semaphore:
             async with self.session.get(url, headers={'Authorization': f'token {self.access_token}'}) as response:

@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -14,6 +15,7 @@ class FileDataHandler:
     async def fetch_data(self):
         query = {"path": self.file_path}
         self.file_data = await AsyncDatabase.find(self.collection_name, query)
+        print(f"File data: {len(self.file_data)}")
         self.process_data()
 
     def process_data(self):
@@ -38,6 +40,8 @@ class FileDataHandler:
         df.sort_values(by='time', inplace=True)
         self.size_df = df.resample('D').ffill()
 
+        print(f"Len in process_data: {len(self.size_df)}")
+
     def prepare_data(self, test_size=0.2):
         """
         Prepares the data for visualisation.
@@ -48,6 +52,9 @@ class FileDataHandler:
             y_train: file sizes of train dataset,
             y_test: file sizes of test dataset
         """
+
+        print("I landed here")
+
         self.size_df.sort_index(inplace=True)
 
         self.size_df.dropna(subset=['size'], inplace=True)
@@ -62,3 +69,44 @@ class FileDataHandler:
         y_test = test['size']
 
         return x_train, y_train, x_test, y_test
+
+    def prepare_lstm_data(self, timesteps=10, test_size=0.2):
+        """
+        Prepares data for LSTM models (3D input for LSTM).
+        :param timesteps: Number of time steps to consider in the LSTM input
+        :param test_size: Percentage of data to be used for testing
+        :return:
+        x_train, y_train: 3D inputs for LSTM training,
+        x_test, y_test: 3D inputs for LSTM testing
+        """
+
+        print("I landed correctly")
+
+        print(self.size_df.head())
+
+        self.size_df.sort_index(inplace=True)
+        self.size_df.ffill(inplace=True)
+        self.size_df.bfill(inplace=True)
+
+        # Split into training and test sets
+        train_size = int((1 - test_size) * len(self.size_df))
+        df_train = self.size_df[:train_size]
+        df_test = self.size_df[train_size:]
+
+        print(f"Train size: {len(df_train)}, Test size: {len(df_test)}")
+        print(f"Timesteps: {timesteps}")
+
+        # Prepare LSTM-specific 3D data [samples, timesteps, features]
+        x_train = np.array([df_train.values[i:i + timesteps] for i in range(len(df_train) - timesteps)])
+        y_train = df_train['size'].values[timesteps:]
+
+        x_test = np.array([df_test.values[i:i + timesteps] for i in range(len(df_test) - timesteps)])
+        y_test = df_test['size'].values[timesteps:]
+
+        print(f"x_train shape: {x_train.shape}")  # Should be (samples, timesteps, features)
+        print(f"y_train shape: {y_train.shape}")  # Should be (samples,)
+        print(f"x_test shape: {x_test.shape}")  # Should be (samples, timesteps, features)
+        print(f"y_test shape: {y_test.shape}")  # Should be (samples,)
+
+        return x_train, y_train, x_test, y_test
+
