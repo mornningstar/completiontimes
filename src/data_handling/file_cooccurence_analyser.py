@@ -38,6 +38,8 @@ class FileCooccurenceAnalyser:
         self.cooccurence_matrix = defaultdict(lambda: defaultdict(int))
 
     def run(self):
+        print("Running file co-occurrence analyser")
+
         cooccurrence_categorized_df, cooccurrence_df = self.build_cooccurrence_matrix()
         proximity_df = self.calculate_directory_proximity(cooccurrence_df)
         combined_df = self.combine_proximity_cooccurrence(proximity_df, cooccurrence_df)

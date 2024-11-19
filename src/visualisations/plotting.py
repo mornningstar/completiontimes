@@ -287,10 +287,10 @@ class Plotter:
 
         self.save_plot(f'commit_predictions_{task}.png')
 
-    def plot_predictions(self, size_df, model_info, file_path):
+    def plot_predictions(self, filedata_df, model_info, file_path, target):
         plt.figure(figsize=(12, 6))
 
-        plt.step(size_df.index, size_df['size'], label='Historical File Size', color='blue', linestyle='solid')
+        plt.step(filedata_df.index, filedata_df[target], label=f'Historical {target.capitalize()}', color='blue', linestyle='solid')
 
         colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
         color_cycle = cycle(colors)
@@ -305,26 +305,26 @@ class Plotter:
             predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
                 'predictions']
 
-            predicted_df = pd.DataFrame({'size': predictions}, index=x_test_dates)
+            predicted_df = pd.DataFrame({target: predictions}, index=x_test_dates)
 
             current_colour = next(color_cycle)
 
-            plt.plot(predicted_df.index, predicted_df['size'],
+            plt.plot(predicted_df.index, predicted_df[target],
                      label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f})', linestyle='-',
                      color=current_colour)
 
             if not predicted_df.empty:
-                first_pred_size = predicted_df.iloc[0]['size']
-                plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_size], color=current_colour,
+                first_pred_target = predicted_df.iloc[0][target]
+                plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_target], color=current_colour,
                          linestyle='-')
 
         plt.xlabel('Date')
-        plt.ylabel('File Size')
-        plt.title(f'File Size Over Time for {file_path}')
+        plt.ylabel(f'File {target.capitalize()}')
+        plt.title(f'{target.capitalize()} Over Time for {file_path}')
         plt.grid(True)
         plt.legend()
 
-        self.save_plot(f'predictions_{file_path.replace("/", "_")}.png')
+        self.save_plot(f'predict_{target}_{file_path.replace("/", "_")}.png')
 
     def plot_clusters(self, combined_df):
         """

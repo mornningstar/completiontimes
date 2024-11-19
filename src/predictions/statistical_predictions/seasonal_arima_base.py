@@ -1,7 +1,9 @@
 import numpy as np
+import pandas as pd
 import pmdarima as pmd
 from scipy.signal import periodogram
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller, acf
 
@@ -11,6 +13,8 @@ from src.predictions.base_model import BaseModel
 class SeasonalARIMABase(BaseModel):
     def __init__(self):
         super().__init__()
+
+        self.scaler = StandardScaler()
 
         self.fitted_model = None
         self.order = None
@@ -49,10 +53,24 @@ class SeasonalARIMABase(BaseModel):
             print("No significant seasonality detected")
             return None
 
+    def scale_data(self, data):
+        """Scale data using StandardScaler."""
+        if isinstance(data, pd.Series):  # Convert to NumPy array if it's a pandas Series
+            data = data.values
+
+        data_scaled = self.scaler.fit_transform(data.reshape(-1, 1)).flatten()
+        return data_scaled
+
+    def inverse_scale(self, data):
+        """Inverse the scaling."""
+        data_original = self.scaler.inverse_transform(data.reshape(-1, 1)).flatten()
+        return data_original
+
     def auto_tune(self, y_train):
         """
         Auto-tune the model by detecting seasonality and setting ARIMA or SARIMA parameters.
         """
+
         # Check if the data is stationary
         stationary = self.adf_test(y_train)
         d = 0 if stationary else 1
@@ -60,7 +78,7 @@ class SeasonalARIMABase(BaseModel):
         # Detect seasonality
         seasonal_period = self.detect_seasonality(y_train, max_lag=365)
 
-        if seasonal_period > 52:  # Cap seasonal period to 52 weeks
+        if seasonal_period is not None and seasonal_period > 52:  # Cap seasonal period to 52 weeks
             print(f"Seasonal period {seasonal_period} too large. Reducing to 52.")
             seasonal_period = 52
 
@@ -96,15 +114,17 @@ class SeasonalARIMABase(BaseModel):
         if y_train is None:
             raise ValueError("y_train cannot be None for ARIMA/SARIMA models.")
 
+        y_train_scaled = self.scale_data(y_train)
+
         if self.model is None:
-            self.auto_tune(y_train)
+            self.auto_tune(y_train_scaled)
 
         if self.order and self.seasonal_order:
             # Use SARIMA
-            self.fitted_model = ARIMA(y_train, order=self.order, seasonal_order=self.seasonal_order).fit()
+            self.fitted_model = ARIMA(y_train_scaled, order=self.order, seasonal_order=self.seasonal_order).fit()
         else:
             # Use ARIMA
-            self.fitted_model = ARIMA(y_train, order=self.order).fit()
+            self.fitted_model = ARIMA(y_train_scaled, order=self.order).fit()
 
     def predict(self, steps):
         """
@@ -113,7 +133,8 @@ class SeasonalARIMABase(BaseModel):
         if self.fitted_model is None:
             raise ValueError("Model is not trained. Call 'train' before predicting.")
 
-        return self.fitted_model.forecast(steps=steps)
+        scaled_predictions = self.fitted_model.forecast(steps=steps)
+        return self.inverse_scale(scaled_predictions)
 
     def evaluate(self, x_test, y_test):
         """

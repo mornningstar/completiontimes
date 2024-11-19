@@ -23,17 +23,22 @@ def add_features(dataframe, size_col='size', window=7):
     return dataframe
 
 class FileDataHandler:
-    def __init__(self, collection_name, file_path):
-        self.collection_name = collection_name
+    def __init__(self, api_connection, file_path):
+        self.api_connection = api_connection
         self.file_path = file_path
         self.file_data = None
         self.filedata_df = None
 
+    async def run(self):
+        await self.fetch_data()
+        self.process_data()
+
     async def fetch_data(self):
         query = {"path": self.file_path}
-        self.file_data = await AsyncDatabase.find(self.collection_name, query)
+        #projection = {"commit_history": 1, "_id": 0}
+        self.file_data = await AsyncDatabase.find(self.api_connection.file_tracking_collection, query)#, projection)
         print(f"File data: {len(self.file_data)}")
-        self.process_data()
+        print(self.file_data)
 
     def process_data(self):
         times = []
@@ -58,6 +63,25 @@ class FileDataHandler:
         self.filedata_df = df.resample('D').ffill()
 
         self.filedata_df = add_features(self.filedata_df)
+
+    def prepare_arima_data(self, target, test_size=0.2):
+        if target not in self.filedata_df.columns:
+            raise ValueError(f"Target column '{target}' not found in DataFrame.")
+
+        arima_df = self.filedata_df.copy()
+
+        arima_df.sort_index(inplace=True)
+        arima_df.dropna(subset=[target], inplace=True)
+
+        feature_cols = [col for col in arima_df.columns if col != target]
+        features = arima_df[feature_cols].values
+        target_values = arima_df[target].values
+
+        train_size = int((1 - test_size) * len(features))
+        x_train, y_train = features[:train_size], target_values[:train_size]
+        x_test, y_test = features[train_size:], target_values[train_size:]
+
+        return x_train, y_train, x_test, y_test
 
     def prepare_data(self, target, test_size=0.2):
         """

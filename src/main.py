@@ -16,6 +16,7 @@ async def process_project(project):
     project_name = project['name']
     models = project['models']
     file_paths = project['file_paths']
+    file_modeling_tasks = project['file_modeling_tasks']
     modeling_tasks = project['modeling']
 
     api_connection = await APIConnectionAsync.create(project_name)
@@ -28,12 +29,12 @@ async def process_project(project):
             await commit_visualiser.run()
             #await repodata_handling.plot()
 
-        cooccurrence_analyser = FileCooccurenceAnalyser(commit_visualiser.commits, project_name)
-        cooccurrence_analyser.run()
+            #cooccurrence_analyser = FileCooccurenceAnalyser(commit_visualiser.commits, project_name)
+            #cooccurrence_analyser.run()
 
         if file_paths:
             for file_path in file_paths:
-                visualiser_files = FileVisualiser(project_name, file_path, models)
+                visualiser_files = FileVisualiser(api_connection, project_name, file_path, models, file_modeling_tasks)
                 await visualiser_files.run()
 
     finally:

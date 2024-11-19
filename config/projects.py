@@ -8,15 +8,15 @@ PROJECTS = [
     {
         'name': 'khoj-ai/khoj',
         'modeling': [
-            'rolling_7_commit_count',
-            'rolling_7_additions',
-            'rolling_7_deletions',
-            'commit_rate_ema',
-            'cumulative_additions',
-            'cumulative_deletions',
-            'cumulative_net_changes',
-            'additions_to_deletions_ratio',
-            'lag_7_commit_count',
+            #'rolling_7_commit_count',
+            #'rolling_7_additions',
+            #'rolling_7_deletions',
+            #'commit_rate_ema',
+            #'cumulative_additions',
+            #'cumulative_deletions',
+            #'cumulative_net_changes',
+            #'additions_to_deletions_ratio',
+            #'lag_7_commit_count',
 
         ],
         'models': [
@@ -29,7 +29,12 @@ PROJECTS = [
             #DecisionTreeModel(grid_search=True),
         ],
         'file_paths': [
-            #'src/khoj/routers/web_client.py'
+            'src/khoj/routers/web_client.py'
+        ],
+        'file_modeling_tasks': [
+            'cumulative_size'
+            #'size',
+            #'rolling_7_std',
         ]
     },
     #{
