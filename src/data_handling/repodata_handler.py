@@ -95,7 +95,7 @@ class RepoDataHandler:
         df = df.groupby(df.index.date).sum()
         df.index = pd.to_datetime(df.index)
 
-        self.commits_df = df.resample('D').asfreq().fillna(0)
+        self.commits_df = df.resample('W').asfreq().fillna(0)
 
         #self.commits_df.ffill(inplace=True)
         #self.commits_df.bfill(inplace=True)

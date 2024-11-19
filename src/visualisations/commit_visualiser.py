@@ -3,6 +3,7 @@ from src.predictions.machine_learning.lstmmodel import LSTMModel
 from src.predictions.model_training import ModelTrainer
 from src.predictions.statistical_predictions.arima import ARIMAModel
 from src.predictions.statistical_predictions.sarima import SARIMAModel
+from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 from src.visualisations.plotting import Plotter
 
 
@@ -24,17 +25,17 @@ class CommitVisualiser:
         lstm_data_splits = None
         other_data_splits = None
 
-        if any(model_class in [ARIMAModel, SARIMAModel] for model_class in self.model_classes):
+        if any(model_class == SeasonalARIMABase for model_class in self.model_classes):
             arima_data_splits = self.data_handler.prepare_arima_data()
         if any(model_class == LSTMModel for model_class in self.model_classes):
             lstm_data_splits = self.data_handler.prepare_lstm_data()
-        if any(model_class not in [ARIMAModel, SARIMAModel, LSTMModel] for model_class in self.model_classes):
+        if any(model_class not in [SeasonalARIMABase, LSTMModel] for model_class in self.model_classes):
             other_data_splits = await self.data_handler.prepare_data()
 
         self.commits = self.data_handler.commit_data
 
         for model in self.model_classes:
-            if model in [ARIMAModel, SARIMAModel] and arima_data_splits:
+            if model == SeasonalARIMABase and arima_data_splits:
                 data_splits = arima_data_splits
             elif model == LSTMModel and lstm_data_splits:
                 data_splits = lstm_data_splits

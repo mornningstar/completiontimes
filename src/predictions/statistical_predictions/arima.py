@@ -15,16 +15,6 @@ class ARIMAModel(BaseModel):
         self.fitted_model = None
         self.order = None
 
-    def adf_test(self, y_train):
-        """
-        Run the augmented Dickey-Fuller Test to test for stationary. With this info, we tune the d parameter
-        :param y_train:
-        :return:
-        """
-        result = adfuller(y_train)
-        p_value = result[1]
-        return p_value <= 0.05  # If p-value <= 0.05, data is stationary
-
     def auto_tune(self, y_train):
         stationary = self.adf_test(y_train)
         if not stationary:
