@@ -27,7 +27,7 @@ class FileDataHandler:
         self.collection_name = collection_name
         self.file_path = file_path
         self.file_data = None
-        self.size_df = None
+        self.filedata_df = None
 
     async def fetch_data(self):
         query = {"path": self.file_path}
@@ -55,13 +55,14 @@ class FileDataHandler:
         df.set_index('time', inplace=True)
         df.index = pd.DatetimeIndex(df.index)
         df.sort_values(by='time', inplace=True)
-        self.size_df = df.resample('D').ffill()
+        self.filedata_df = df.resample('D').ffill()
 
-        self.size_df = add_features(self.size_df)
+        self.filedata_df = add_features(self.filedata_df)
 
-    def prepare_data(self, test_size=0.2):
+    def prepare_data(self, target, test_size=0.2):
         """
         Prepares the data for visualisation.
+        :param target: target column - which column to predict
         :param test_size: Percentage of data to be used for testing
         :return:
             x_train: timestamps of train datatest,
@@ -69,56 +70,54 @@ class FileDataHandler:
             y_train: file sizes of train dataset,
             y_test: file sizes of test dataset
         """
+        if target not in self.filedata_df.columns:
+            raise ValueError(f"Target column '{target}' not found in DataFrame.")
 
-        print("I landed here")
+        self.filedata_df.sort_index(inplace=True)
+        self.filedata_df.dropna(subset=[target], inplace=True)
 
-        self.size_df.sort_index(inplace=True)
-
-        self.size_df.dropna(subset=['size'], inplace=True)
-
-        train_size = 1 - test_size
-        train, test = train_test_split(self.size_df, train_size=train_size, shuffle=False)
+        train, test = train_test_split(self.filedata_df, test_size=test_size, shuffle=False)
 
         x_train = train.index.astype(int).values.reshape(-1, 1)
-        y_train = train['size']
+        y_train = train[target]
 
         x_test = test.index.astype(int).values.reshape(-1, 1)
-        y_test = test['size']
+        y_test = test[target]
 
         return x_train, y_train, x_test, y_test
 
-    def prepare_lstm_data(self, timesteps=10, test_size=0.2):
+    def prepare_lstm_data(self, target, timesteps=10, test_size=0.2):
         """
         Prepares data for LSTM models (3D input for LSTM).
+        :param target: target column - which column to predict
         :param timesteps: Number of time steps to consider in the LSTM input
         :param test_size: Percentage of data to be used for testing
         :return:
         x_train, y_train: 3D inputs for LSTM training,
         x_test, y_test: 3D inputs for LSTM testing
         """
+        if target not in self.filedata_df.columns:
+            raise ValueError(f"Target column '{target}' not found in DataFrame.")
+        if len(self.filedata_df) < timesteps:
+            raise ValueError(f"Not enough data points to create sequences with timesteps={timesteps}.")
 
-        print("I landed correctly")
+        self.filedata_df.sort_index(inplace=True)
+        self.filedata_df.ffill(inplace=True)
+        self.filedata_df.bfill(inplace=True)
 
-        print(self.size_df.head())
-
-        self.size_df.sort_index(inplace=True)
-        self.size_df.ffill(inplace=True)
-        self.size_df.bfill(inplace=True)
+        feature_cols = [col for col in self.filedata_df.columns if col != target]
 
         # Split into training and test sets
-        train_size = int((1 - test_size) * len(self.size_df))
-        df_train = self.size_df[:train_size]
-        df_test = self.size_df[train_size:]
-
-        print(f"Train size: {len(df_train)}, Test size: {len(df_test)}")
-        print(f"Timesteps: {timesteps}")
+        train_size = int((1 - test_size) * len(self.filedata_df))
+        df_train = self.filedata_df[:train_size]
+        df_test = self.filedata_df[train_size:]
 
         # Prepare LSTM-specific 3D data [samples, timesteps, features]
-        x_train = np.array([df_train.values[i:i + timesteps] for i in range(len(df_train) - timesteps)])
-        y_train = df_train['size'].values[timesteps:]
+        x_train = np.array([df_train[feature_cols].values[i:i + timesteps] for i in range(len(df_train) - timesteps)])
+        y_train = df_train[target].values[timesteps:]
 
-        x_test = np.array([df_test.values[i:i + timesteps] for i in range(len(df_test) - timesteps)])
-        y_test = df_test['size'].values[timesteps:]
+        x_test = np.array([df_test[feature_cols].values[i:i + timesteps] for i in range(len(df_test) - timesteps)])
+        y_test = df_test[target].values[timesteps:]
 
         print(f"x_train shape: {x_train.shape}")  # Should be (samples, timesteps, features)
         print(f"y_train shape: {y_train.shape}")  # Should be (samples,)
