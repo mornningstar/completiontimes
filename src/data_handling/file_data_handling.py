@@ -4,6 +4,23 @@ from sklearn.model_selection import train_test_split
 
 from src.data_handling.async_database import AsyncDatabase
 
+def add_features(dataframe, size_col='size', window=7):
+    # Rolling mean of file size over the window
+    dataframe[f'rolling_{window}_size'] = dataframe[size_col].rolling(window=window).mean()
+
+    # Rolling standard deviation of file size
+    dataframe[f'rolling_{window}_std'] = dataframe[size_col].rolling(window=window).std()
+
+    # Exponential moving average (EMA) of file size
+    dataframe[f'size_ema'] = dataframe[size_col].ewm(span=window, adjust=False).mean()
+
+    # Cumulative file size
+    dataframe['cumulative_size'] = dataframe[size_col].cumsum()
+
+    # Lag features
+    dataframe[f'lag_{window}_size'] = dataframe[size_col].shift(window)
+
+    return dataframe
 
 class FileDataHandler:
     def __init__(self, collection_name, file_path):
@@ -40,7 +57,7 @@ class FileDataHandler:
         df.sort_values(by='time', inplace=True)
         self.size_df = df.resample('D').ffill()
 
-        print(f"Len in process_data: {len(self.size_df)}")
+        self.size_df = add_features(self.size_df)
 
     def prepare_data(self, test_size=0.2):
         """
