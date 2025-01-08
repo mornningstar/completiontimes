@@ -5,20 +5,30 @@ from sklearn.model_selection import train_test_split
 from src.data_handling.async_database import AsyncDatabase
 
 def add_features(dataframe, size_col='size', window=7):
-    # Rolling mean of file size over the window
     dataframe[f'rolling_{window}_size'] = dataframe[size_col].rolling(window=window).mean()
-
-    # Rolling standard deviation of file size
     dataframe[f'rolling_{window}_std'] = dataframe[size_col].rolling(window=window).std()
+    dataframe[f'rolling_{window}_max'] = dataframe[size_col].rolling(window=window).max()
+    dataframe[f'rolling_{window}_min'] = dataframe[size_col].rolling(window=window).min()
+    dataframe[f'rolling_{window}_median'] = dataframe[size_col].rolling(window=window).median()
+    dataframe[f'rolling_{window}_var'] = dataframe[size_col].rolling(window=window).var()
 
     # Exponential moving average (EMA) of file size
-    dataframe[f'size_ema'] = dataframe[size_col].ewm(span=window, adjust=False).mean()
+    dataframe['size_ema'] = dataframe[size_col].ewm(span=window, adjust=False).mean()
 
     # Cumulative file size
     dataframe['cumulative_size'] = dataframe[size_col].cumsum()
+    dataframe['cumulative_mean'] = dataframe[size_col].expanding().mean()
+    dataframe['cumulative_std'] = dataframe[size_col].expanding().std()
 
     # Lag features
-    dataframe[f'lag_{window}_size'] = dataframe[size_col].shift(window)
+    for lag in range(1, window + 1):
+        dataframe[f'lag_{lag}_size'] = dataframe[size_col].shift(lag)
+
+    dataframe['absolute_change'] = dataframe[size_col].diff().abs()
+    dataframe['percentage_change'] = dataframe[size_col].pct_change() * 100
+
+    dataframe['rolling_mean_to_std_ratio'] = dataframe[f'rolling_{window}_size'] / dataframe[f'rolling_{window}_std']
+    dataframe['rolling_mean_to_std_ratio'].replace([np.inf, -np.inf], 0, inplace=True)
 
     return dataframe
 
@@ -83,6 +93,7 @@ class FileDataHandler:
 
         return x_train, y_train, x_test, y_test
 
+    # Tried for Prophet last
     def prepare_data(self, target, test_size=0.2):
         """
         Prepares the data for visualisation.
@@ -97,15 +108,16 @@ class FileDataHandler:
         if target not in self.filedata_df.columns:
             raise ValueError(f"Target column '{target}' not found in DataFrame.")
 
-        self.filedata_df.sort_index(inplace=True)
+        self.filedata_df.replace([np.inf, -np.inf], np.nan)
         self.filedata_df.dropna(subset=[target], inplace=True)
+        self.filedata_df.sort_index(inplace=True)
 
         train, test = train_test_split(self.filedata_df, test_size=test_size, shuffle=False)
 
-        x_train = train.index.astype(int).values.reshape(-1, 1)
+        x_train = train.index.tz_localize(None)
         y_train = train[target]
 
-        x_test = test.index.astype(int).values.reshape(-1, 1)
+        x_test = test.index.tz_localize(None)
         y_test = test[target]
 
         return x_train, y_train, x_test, y_test

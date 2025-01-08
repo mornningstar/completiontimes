@@ -20,8 +20,8 @@ PROJECTS = [
 
         ],
         'models': [
-            #ProphetModel,
-            SeasonalARIMABase,
+            ProphetModel,
+            #SeasonalARIMABase,
             #LSTMModel(),
             #ARIMAModel(),
             #SARIMAModel(),
@@ -32,7 +32,26 @@ PROJECTS = [
             'src/khoj/routers/web_client.py'
         ],
         'file_modeling_tasks': [
-            'cumulative_size'
+            'rolling_7_size',
+            'rolling_7_std',
+            'rolling_7_max',
+            'rolling_7_min',
+            'rolling_7_median',
+            'rolling_7_var',
+            'size_ema',
+            'cumulative_size',
+            'cumulative_mean',
+            'cumulative_std',
+            'lag_1_size',
+            'lag_2_size',
+            'lag_3_size',
+            'lag_4_size',
+            'lag_5_size',
+            'lag_6_size',
+            'lag_7_size',
+            'absolute_change',
+            'percentage_change',
+            'rolling_mean_to_std_ratio'
             #'size',
             #'rolling_7_std',
         ]

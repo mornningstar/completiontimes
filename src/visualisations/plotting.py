@@ -207,6 +207,14 @@ class Plotter:
 
         self.save_plot("commits.png")
 
+    def plot_prophet_predictions(self, df, model_info, task):
+        plt.figure(figsize=(12, 6))
+
+        plt.step(df.index, df[task], label=f'Historical {task.capitalize()}', color='blue',
+                 linestyle='solid')
+
+
+
     def plot_lstm_predictions(self, commits_df, model_info, task):
         plt.figure(figsize=(12, 6))
 
@@ -296,22 +304,28 @@ class Plotter:
         color_cycle = cycle(colors)
 
         for model_name, info in model_info.items():
-            x_train_dates = pd.to_datetime(info['x_train'].flatten())
-            x_test_dates = pd.to_datetime(info['x_test'].flatten())
+            if model_name == "ProphetModel":
+                x_train_dates = pd.to_datetime(info['x_train'], errors='coerce').tz_localize(None)
+                x_test_dates = pd.to_datetime(info['x_test'], errors='coerce').tz_localize(None)
+
+                predictions = info['predictions']
+            else:
+                x_train_dates = pd.to_datetime(info['x_train'].flatten())
+                x_test_dates = pd.to_datetime(info['x_test'].flatten())
+
+                predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
+                    'predictions']
 
             last_train_point = info['y_train'].iloc[-1]
             last_train_date = x_train_dates[-1]
-
-            predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
-                'predictions']
 
             predicted_df = pd.DataFrame({target: predictions}, index=x_test_dates)
 
             current_colour = next(color_cycle)
 
             plt.plot(predicted_df.index, predicted_df[target],
-                     label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f})', linestyle='-',
-                     color=current_colour)
+                     label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, '
+                        f'RMSE: {info["rmse"]:.2f})', linestyle='-', color=current_colour)
 
             if not predicted_df.empty:
                 first_pred_target = predicted_df.iloc[0][target]

@@ -33,9 +33,9 @@ class ProphetModel(BaseModel):
         def objective(trial):
             # Suggest values for each hyperparameter
             seasonality_mode = trial.suggest_categorical("seasonality_mode", ["additive", "multiplicative"])
-            changepoint_prior_scale = trial.suggest_loguniform("changepoint_prior_scale", 0.001, 0.5)
-            seasonality_prior_scale = trial.suggest_loguniform("seasonality_prior_scale", 0.1, 20)
-            holidays_prior_scale = trial.suggest_loguniform("holidays_prior_scale", 0.1, 20)
+            changepoint_prior_scale = trial.suggest_float("changepoint_prior_scale", 0.001, 0.5, log=True)
+            seasonality_prior_scale = trial.suggest_float("seasonality_prior_scale", 0.1, 20, log=True)
+            holidays_prior_scale = trial.suggest_float("holidays_prior_scale", 0.1, 20, log=True)
             yearly_seasonality = trial.suggest_categorical("yearly_seasonality", [5, 10, 15, False])
             weekly_seasonality = trial.suggest_categorical("weekly_seasonality", [3, 7, 10, False])
             daily_seasonality = trial.suggest_categorical("daily_seasonality", [3, 5, 7, False])
