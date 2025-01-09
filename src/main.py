@@ -31,7 +31,7 @@ async def process_project(project):
     api_connection = await APIConnectionAsync.create(project_name)
 
     try:
-        #await api_connection.populate_db()
+        await api_connection.populate_db()
 
         if modeling_tasks:
             commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
@@ -47,6 +47,7 @@ async def process_project(project):
                 await visualiser_files.run()
 
     finally:
+        logging.INFO('Project finished successfully!')
         await api_connection.close_session()
 
 

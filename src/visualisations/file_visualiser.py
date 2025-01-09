@@ -6,7 +6,7 @@ from src.predictions.model_training import ModelTrainer
 from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 from src.visualisations.plotting import Plotter
 
-matplotlib.use('TkAgg')
+matplotlib.use('Agg')
 
 
 class FileVisualiser:
