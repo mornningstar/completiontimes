@@ -23,10 +23,10 @@ logging.basicConfig(
 
 async def process_project(project):
     project_name = project['name']
-    models = project['models']
-    file_paths = project['file_paths']
-    file_modeling_tasks = project['file_modeling_tasks']
-    modeling_tasks = project['modeling']
+    models = project['models'] if 'models' in project else []
+    file_paths = project['file_paths'] if 'file_paths' in project else []
+    file_modeling_tasks = project['file_modeling_tasks'] if 'file_modeling_tasks' in project else []
+    modeling_tasks = project['modeling'] if 'modeling' in project else []
 
     api_connection = await APIConnectionAsync.create(project_name)
 

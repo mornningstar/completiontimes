@@ -9,6 +9,7 @@ from aiohttp import ClientResponseError
 from requests.utils import parse_header_links
 
 from src.data_handling.async_database import AsyncDatabase
+from config.config import CONFIG
 
 
 class APIConnectionAsync:
@@ -17,8 +18,12 @@ class APIConnectionAsync:
     def __init__(self, github_repo_username_title):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.session = None
-        self.config = self.load_config()
-        self.access_token = self.config.get('github_access_token', '')
+
+        #self.config = self.load_config()
+        config = CONFIG[0]['github_access_token'] #self.load_config()
+        self.access_token = config
+        #self.access_token = self.config.get('github_access_token', '')
+
         self.github_repo_username_title = github_repo_username_title
         self.get_commits_url = f'https://api.github.com/repos/{github_repo_username_title}/commits'
         self.get_contents_url = f'https://api.github.com/repos/{github_repo_username_title}/contents'
@@ -48,7 +53,7 @@ class APIConnectionAsync:
     @staticmethod
     def load_config():
         try:
-            with open('config.json', 'r') as config_file:
+            with open('config.py', 'r') as config_file:
                 return json.load(config_file)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
@@ -85,7 +90,7 @@ class APIConnectionAsync:
         return None
 
     async def get_commit_list(self, update=False):
-        logging.INFO('Getting commit list')
+        logging.info(f'Getting commit list for {self.github_repo_username_title}')
 
         url = self.get_commits_url + '?per_page=' + str(APIConnectionAsync.RESULTS_PER_PAGE)
 
@@ -129,6 +134,8 @@ class APIConnectionAsync:
         return response, file_paths
 
     async def batch_get_commit_info(self, batch_size=200):
+        logging.info(f'Getting batch commit info for {self.github_repo_username_title}')
+
         commit_info_list = []
         file_paths_set = set()
         file_path_data = []
@@ -187,7 +194,7 @@ class APIConnectionAsync:
             commits, headers = await self.make_request(url)
 
             if not commits:
-                print(f'No commit history has been found for {file_path}')
+                logging.warning('No commits found for file {}'.format(file_path))
                 break
 
             commit_history = []
@@ -223,12 +230,15 @@ class APIConnectionAsync:
             print("Next URL: ", url)  # Debugging statement
 
     async def iterate_over_file_paths(self):
+        logging.info(f'Iterating over the files of {self.github_repo_username_title} to get commit history')
         files = await AsyncDatabase.fetch_all(self.file_tracking_collection)
 
         logging.INFO('Iterating over {} files'.format(len(files)))
 
         for file in files:
             await self.get_file_commit_history(file['path'])
+
+        logging.info('All files were iterated over')
 
     async def populate_db(self):
         try:
