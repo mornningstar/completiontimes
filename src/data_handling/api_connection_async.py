@@ -85,6 +85,8 @@ class APIConnectionAsync:
         return None
 
     async def get_commit_list(self, update=False):
+        logging.INFO('Getting commit list')
+
         url = self.get_commits_url + '?per_page=' + str(APIConnectionAsync.RESULTS_PER_PAGE)
 
         while url:
@@ -135,7 +137,7 @@ class APIConnectionAsync:
         full_info_shas = await AsyncDatabase.fetch_all_shas(self.full_commit_info_collection)
         missing_shas = list_shas - full_info_shas
 
-
+        logging.INFO('Getting commit info for {} commits'.format(len(missing_shas)))
 
         for sha in missing_shas:
             commit_info, file_paths = await self.get_commit_info(sha)
@@ -222,6 +224,8 @@ class APIConnectionAsync:
 
     async def iterate_over_file_paths(self):
         files = await AsyncDatabase.fetch_all(self.file_tracking_collection)
+
+        logging.INFO('Iterating over {} files'.format(len(files)))
 
         for file in files:
             await self.get_file_commit_history(file['path'])
