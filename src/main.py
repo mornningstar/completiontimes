@@ -1,5 +1,7 @@
 import asyncio
 import platform
+import logging
+
 
 from config.projects import PROJECTS
 from src.data_handling.api_connection_async import APIConnectionAsync
@@ -10,6 +12,13 @@ from src.visualisations.file_visualiser import FileVisualiser
 
 if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,  # Adjust the level as needed
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 
 async def process_project(project):

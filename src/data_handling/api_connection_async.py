@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 
 import aiohttp
@@ -14,6 +15,7 @@ class APIConnectionAsync:
     RESULTS_PER_PAGE = 100
 
     def __init__(self, github_repo_username_title):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.session = None
         self.config = self.load_config()
         self.access_token = self.config.get('github_access_token', '')
@@ -132,6 +134,8 @@ class APIConnectionAsync:
         list_shas = await AsyncDatabase.fetch_all_shas(self.commit_list_collection)
         full_info_shas = await AsyncDatabase.fetch_all_shas(self.full_commit_info_collection)
         missing_shas = list_shas - full_info_shas
+
+
 
         for sha in missing_shas:
             commit_info, file_paths = await self.get_commit_info(sha)
