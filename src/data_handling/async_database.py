@@ -1,3 +1,5 @@
+import logging
+
 import pymongo
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -58,3 +60,22 @@ class AsyncDatabase:
     @staticmethod
     async def find_one(collection, query):
         return await AsyncDatabase.DATABASE[collection].find_one(query)
+
+    @staticmethod
+    async def update_one(collection, filter_query, update_query, upsert=False):
+        result = await AsyncDatabase.DATABASE[collection].update_one(filter_query, update_query, upsert=upsert)
+        return result
+
+    @staticmethod
+    async def delete_one(collection, query):
+        try:
+            result = await AsyncDatabase.DATABASE[collection].delete_one(query)
+            if result.deleted_count == 0:
+                logging.warning(f"No document found to delete in collection '{collection}' with query: {query}")
+            else:
+                logging.info(f"Deleted one document from collection '{collection}' with query: {query}")
+            return {"deleted_count": result.deleted_count}
+        except Exception as e:
+            logging.error(
+                f"Error while deleting document from collection '{collection}' with query: {query}. Error: {e}")
+            return {"deleted_count": 0, "error": str(e)}

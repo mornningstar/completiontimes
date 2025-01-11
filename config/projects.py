@@ -6,7 +6,8 @@ from src.predictions.statistical_predictions.seasonal_arima_base import Seasonal
 
 PROJECTS = [
     {
-        'name': 'mozilla/addons-server',
+        'name': 'khoj-ai/khoj'
+        #'name': 'mozilla/addons-server',
     },
     {
         'name': 'openedx/edx-platform'

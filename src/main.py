@@ -47,7 +47,7 @@ async def process_project(project):
                 await visualiser_files.run()
 
     finally:
-        logging.INFO('Project finished successfully!')
+        logging.info('Project {} finished successfully!'.format(project_name))
         await api_connection.close_session()
 
 
