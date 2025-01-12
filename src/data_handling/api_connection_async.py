@@ -175,7 +175,16 @@ class APIConnectionAsync:
 
         try:
             response, _ = await self.make_request(url)
-            return response['size']
+
+            if isinstance(response, list):
+                logging.error(f"Unexpected list response for {url}: {response}")
+                return 'unexpected_list_response'
+            if isinstance(response, dict) and 'size' in response:
+                return response['size']
+
+            logging.error(f"Unexpected response structure for {url}: {response}")
+            return 'unexpected_response'
+
         except ClientResponseError as e:
             if e.status == 404:
                 return 'file_not_found'
@@ -220,6 +229,10 @@ class APIConnectionAsync:
 
                 commit_date = commit['commit']['author']['date']
                 size_or_status = await self.get_file_size_at_commit(file_path, sha)
+
+                if size_or_status == ('unexpected_list_response', 'unexpected_response'):
+                    logging.warning(f"Skipping commit {sha} for file {file_path} due to {size_or_status}")
+                    continue
 
                 if size_or_status == 'file_not_found':
                     commit_details = await self.get_commit_details(commit['sha'])
