@@ -46,6 +46,9 @@ async def process_project(project):
                 visualiser_files = FileVisualiser(api_connection, project_name, file_path, models, file_modeling_tasks)
                 await visualiser_files.run()
 
+    except Exception:
+        logging.exception('Error while processing project {}'.format(project_name))
+
     finally:
         logging.info('Project {} finished successfully!'.format(project_name))
         await api_connection.close_session()

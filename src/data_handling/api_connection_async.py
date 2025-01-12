@@ -170,6 +170,8 @@ class APIConnectionAsync:
             await AsyncDatabase.insert_many(self.full_commit_info_collection, commit_info_list, data_type='commit')
             await AsyncDatabase.insert_many(self.file_tracking_collection, file_path_data, data_type='files')
 
+        return file_path_data
+
     async def get_file_size_at_commit(self, file_path, sha):
         url = f'{self.get_contents_url}/{file_path}?ref={sha}'
 
@@ -302,13 +304,21 @@ class APIConnectionAsync:
 
         return unique_history
 
-    async def iterate_over_file_paths(self, update=False):
+    async def iterate_over_file_paths(self, affected_files, update=False):
         logging.info(f'Iterating over the files of {self.github_repo_username_title} to get commit history')
-        files = await AsyncDatabase.fetch_all(self.file_tracking_collection)
 
-        logging.info('Iterating over {} files'.format(len(files)))
+        if update:
+            if affected_files:
+                files_to_iterate = [{'path': path} for path in affected_files]
+            else:
+                logging.info("No files to process.")
+                return
+        else:
+            files_to_iterate = await AsyncDatabase.fetch_all(self.file_tracking_collection)
 
-        for file in files:
+        logging.info('Iterating over {} files'.format(len(files_to_iterate)))
+
+        for file in files_to_iterate:
             await self.get_file_commit_history(file['path'], update=update)
 
         logging.info('All files were iterated over')
@@ -319,8 +329,8 @@ class APIConnectionAsync:
             update = commit_list_exists is not None
 
             await self.get_commit_list(update=update)
-            await self.batch_get_commit_info()
-            await self.iterate_over_file_paths(update=update)
+            file_paths = await self.batch_get_commit_info()
+            await self.iterate_over_file_paths(file_paths, update=update)
 
         except Exception as e:
             logging.error(f"An error occurred in populate_db: {e}", exc_info=True)
