@@ -13,7 +13,8 @@ class ModelTrainer:
 
         self.logger = logging.getLogger(__name__)
 
-    def train_and_evaluate_model(self, x_train, y_train, x_test, y_test):
+    def train_and_evaluate_model(self, x_train, y_train, x_test, y_test, use_clusters=False):
+
         model_info = {}
 
         for model_class in self.model_classes:

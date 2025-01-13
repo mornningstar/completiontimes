@@ -14,8 +14,11 @@ class AsyncDatabase:
         AsyncDatabase.DATABASE = client['github_data']
 
     @staticmethod
-    async def fetch_all(collection):
-        data = await AsyncDatabase.find(collection, query={})
+    async def fetch_all(collection, query=None, projection=None):
+        if query is None:
+            query = {}
+
+        data = await AsyncDatabase.find(collection, query=query, projection=projection)
         return data
 
     @staticmethod

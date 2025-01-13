@@ -1,3 +1,4 @@
+import logging
 import os
 from itertools import cycle
 
@@ -8,6 +9,7 @@ from matplotlib import pyplot as plt
 
 class Plotter:
     def __init__(self, project_name=None, images_dir='images'):
+        self.logging = logging.getLogger(self.__class__.__name__)
         self.images_dir = images_dir
         self.project_name = project_name
 
@@ -45,7 +47,7 @@ class Plotter:
 
         self.save_plot("plot.png")
 
-    def plot_cooccurrence_matrix(self, cooccurrence_df, top_n_files=None):
+    def plot_cooccurrence_matrix(self, cooccurrence_df, top_n_files=None, value_label="Value"):
         """
         Plots a heatmap of the co-occurrence matrix.
         :param cooccurrence_df:
@@ -53,11 +55,11 @@ class Plotter:
         :return:
         """
 
-        category_to_num = {'Low': 0, 'Middle': 1, 'High': 2}
-        numeric_matrix = cooccurrence_df.apply(lambda col: col.map(category_to_num).fillna(0))
+        #category_to_num = {'Low': 0, 'Middle': 1, 'High': 2}
+        #numeric_matrix = cooccurrence_df.apply(lambda col: col.map(category_to_num).fillna(0))
 
         sorted_files = sorted(cooccurrence_df.index)
-        numeric_matrix = numeric_matrix.reindex(sorted_files, axis=0).reindex(sorted_files, axis=1)
+        numeric_matrix = cooccurrence_df.reindex(sorted_files, axis=0).reindex(sorted_files, axis=1)
 
         if top_n_files:
             cooccurrence_sums = numeric_matrix.sum(axis=1).sort_values(ascending=False)
@@ -68,14 +70,16 @@ class Plotter:
                 raise ValueError("Filtered matrix is empty.")
 
         plt.figure(figsize=(20, 16))
-        sns.set(font_scale=0.8)
+        sns.set_theme(font_scale=0.8)
         sns.heatmap(numeric_matrix, cmap='coolwarm', annot=False, square=True)
         plt.title('File Co-occurrence Matrix')
         plt.xticks(rotation=90)
         plt.yticks(rotation=0)
         plt.tight_layout()
 
-        self.save_plot("cooccurrence_matrix.png")
+        plot_name = f"cooccurrence_matrix_{value_label.lower()}.png"
+        self.save_plot(plot_name)
+        logging.info(f"Co-occurrence matrix plot saved as {plot_name}.")
 
     def plot_zipf_distribution(self, cooccurrence_df):
         """file_pairs = [(min(i), max(j)) for i in cooccurrence_df.index for j in cooccurrence_df.columns]
@@ -159,7 +163,7 @@ class Plotter:
 
         self.save_plot("proximity_histogram.png")
 
-    def plot_distance_vs_cooccurrence(self, combined_df):
+    def plot_distance_vs_cooccurrence(self, combined_df, scaled=True):
         """
         Uses the scaled distance and co-occurrence.
         :param combined_df:
@@ -167,24 +171,28 @@ class Plotter:
         """
         plt.figure(figsize=(12, 8))
 
+        distance_label = 'Directory Distance (Scaled)' if scaled else 'Directory Distance (Raw)'
+        cooccurrence_label = 'Co-occurrence (Scaled)' if scaled else 'Co-occurrence (Raw)'
+        filename = "distance_vs_cooccurrence_scaled.png" if scaled else "distance_vs_cooccurrence_raw.png"
+
         # Use 'hue' to color by cooccurrence_level and 'style' to differentiate by distance_level
         sns.scatterplot(
             data=combined_df,
-            x='distance_scaled',
-            y='cooccurrence_scaled',
+            x='distance_scaled' if scaled else 'distance',
+            y='cooccurrence_scaled' if scaled else 'cooccurrence',
             hue='cooccurrence_level',
             style='distance_level',
             palette='viridis',
             s=100  # increase point size for better visibility
         )
 
-        plt.title('Scaled Directory Distance vs. Co-occurrence')
-        plt.xlabel('Directory Distance (Scaled)')
-        plt.ylabel('Co-occurrence (Scaled)')
+        plt.title(f'{distance_label} vs. {cooccurrence_label}')
+        plt.xlabel(distance_label)
+        plt.ylabel(cooccurrence_label)
         plt.legend(title='Levels')
         plt.tight_layout()
 
-        self.save_plot("distance_vs_cooccurrence_scaled.png")
+        self.save_plot(filename)
 
     def plot_distance_vs_cooccurrence_matrix(self, matrix):
         plt.figure(figsize=(6, 6))

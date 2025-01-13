@@ -1,11 +1,17 @@
+import logging
+
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from src.data_handling.async_database import AsyncDatabase
+from src.predictions.machine_learning.lstmmodel import LSTMModel
+from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
+
 
 class FileDataHandler:
     def __init__(self, api_connection, file_path):
+        self.logging = logging.getLogger(self.__class__.__name__)
         self.api_connection = api_connection
         self.file_path = file_path
         self.file_data = None
@@ -52,9 +58,20 @@ class FileDataHandler:
         self.filedata_df.ffill(inplace=True)
         self.filedata_df.bfill(inplace=True)
 
-    def prepare_arima_data(self, target, test_size=0.2):
+    def validate_target(self, target):
         if target not in self.filedata_df.columns:
-            raise ValueError(f"Target column '{target}' not found in DataFrame.")
+            raise ValueError(f"Target column '{target}' not found in the data.")
+
+    def prepare_model_specific_data(self, models, target, data, timesteps=10, test_size=0.2):
+        if any(isinstance(model, LSTMModel) for model in models):
+            return self.prepare_lstm_data(target, timesteps, test_size)
+        elif any(isinstance(model, SeasonalARIMABase) for model in models):
+            return self.prepare_arima_data(target, test_size)
+        else:
+            return self.prepare_data(target, test_size)
+
+    def prepare_arima_data(self, target, test_size=0.2):
+        self.validate_target(target)
 
         arima_df = self.filedata_df.copy()
 
@@ -83,8 +100,7 @@ class FileDataHandler:
             y_train: file sizes of train dataset,
             y_test: file sizes of test dataset
         """
-        if target not in self.filedata_df.columns:
-            raise ValueError(f"Target column '{target}' not found in DataFrame.")
+        self.validate_target(target)
 
         self.filedata_df.replace([np.inf, -np.inf], np.nan)
         self.filedata_df.dropna(subset=[target], inplace=True)
@@ -110,8 +126,8 @@ class FileDataHandler:
         x_train, y_train: 3D inputs for LSTM training,
         x_test, y_test: 3D inputs for LSTM testing
         """
-        if target not in self.filedata_df.columns:
-            raise ValueError(f"Target column '{target}' not found in DataFrame.")
+        self.validate_target(target)
+
         if len(self.filedata_df) < timesteps:
             raise ValueError(f"Not enough data points to create sequences with timesteps={timesteps}.")
 
@@ -140,23 +156,40 @@ class FileDataHandler:
 
         return x_train, y_train, x_test, y_test
 
-    def aggregate_cluster_features(self, combined_df, feature_name):
+    def prepare_cluster_data(self, target, cluster_data):
+        """
+        Prepares cluster-level data with minimal preprocessing.
+        :param target: Target column to predict.
+        :param cluster_data: Aggregated cluster-level time-series data.
+        :return: Preprocessed cluster_data DataFrame.
+        """
+        self.validate_target()
+
+        cluster_data = cluster_data.copy()
+        cluster_data.dropna(subset=[target], inplace=True)
+        cluster_data.sort_index(inplace=True)
+
+        return cluster_data
+
+    def aggregate_cluster_features(self, combined_df):
         cluster_time_series = {}
 
-        for cluster_id in combined_df['cluster'].unique():
-            cluster_files = combined_df[combined_df['cluster'] == cluster_id]
+        for cluster_id, cluster_files in combined_df.groupby('cluster'):
+            file_features = pd.concat(
+                [
+                    self.filedata_df[self.filedata_df['path'] == row['file1']]
+                    for _, row in cluster_files.iterrows()
+                ] + [
+                    self.filedata_df[self.filedata_df['path'] == row['file2']]
+                    for _, row in cluster_files.iterrows()
+                ]
+            )
 
-            file_features = []
-            for _, row in cluster_files.iterrows():
-                file1_features = self.file_features[self.file_features['path'] == row['file1']]
-                file2_features = self.file_features[self.file_features['path'] == row['file2']]
-                file_features.append(pd.concat([file1_features, file2_features]))
+            if file_features.empty:
+                self.logging.warning(f"No valid files found for cluster {cluster_id}")
+                continue
 
-            # Combine and sort features by date
-            cluster_feature_df = pd.concat(file_features).sort_values('date')
-
-            # Aggregate the feature across all files in the cluster
-            time_series = cluster_feature_df.groupby('date')[feature_name].mean()
-            cluster_time_series[cluster_id] = time_series
+            aggregated_features = file_features.groupby('date').mean()
+            cluster_time_series[cluster_id] = aggregated_features
 
         return cluster_time_series

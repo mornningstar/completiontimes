@@ -4,6 +4,24 @@ PROJECTS = [
     {
         'name': 'khoj-ai/khoj',
         'models': [SeasonalARIMABase],
+        "recluster": False,
+        "replot": True,
+        "plot_options": {
+            'hierarchical': True,
+
+            'cooccurrence_matrix': True,
+            'cooccurrence_data': 'categorised',  # Choose 'raw' or 'categorized'
+            'top_n_files': 10,  # Change the number of top files for the co-occurrence matrix
+
+            'proximity_matrix': True,
+            'proximity_histogram': False,  # Skip the histogram
+
+            'distance_vs_cooccurrence': True,
+            'distance_vs_cooccurrence_data': 'scaled',  # Choose 'raw' or 'scaled'
+
+            'zipf_distribution': True
+        },
+
         'file_modeling_tasks': {
             'size': {
                 'files': ['src/interface/emacs/khoj.el', 'src/khoj/database/adapters/__init__.py'],
@@ -16,10 +34,5 @@ PROJECTS = [
                 }
             }
         },
-        'general_config': {
-            'historical_validation_split': 0.8,  # Define split ratio for historical validation
-            'time_horizon': 30,  # Define prediction horizon (e.g., for no-commit probability)
-            'auto_tune': True,  # Enable/disable auto-tuning for models
-        }
     },
 ]

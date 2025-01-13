@@ -9,10 +9,10 @@ from src.data_handling.async_database import AsyncDatabase
 
 
 class ClusterAnalyser:
-    def __init__(self, df_for_clustering, plotter, api_connection):
+    def __init__(self, combined_df, plotter, api_connection):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.df_for_clustering = df_for_clustering
-        self.numerical_df_for_clustering = self.df_for_clustering[['cooccurrence_scaled', 'distance_scaled']]
+        self.combined_df = combined_df
+        self.numerical_df_for_clustering = self.combined_df[['cooccurrence_scaled', 'distance_scaled']]
 
         self.plotter = plotter
         self.api_connection = api_connection
@@ -59,37 +59,55 @@ class ClusterAnalyser:
         """
         logging.info("Running clustering analysis")
 
+        logging.info("Initializing KMeans...")
         kmeans = KMeans(n_clusters=k, random_state=42)
+        logging.info("Fitting KMeans on numerical data...")
         cluster_labels = kmeans.fit_predict(self.numerical_df_for_clustering)
+        logging.info("Clustering completed.")
 
-        # Cluster labels are added to original combined_df
-        self.df_for_clustering['cluster'] = cluster_labels
+        self.combined_df['cluster'] = cluster_labels
 
-        # Save cluster labels to the database
-        for file_path, cluster_id in zip(self.df_for_clustering['path'], cluster_labels):
-            try:
-                await AsyncDatabase.update_one(
-                    self.api_connection.file_tracking_collection,
-                    {'path': file_path},
-                    {'$set': {'cluster': cluster_id}}
-                )
-            except Exception as e:
-                logging.error(f"Failed to save cluster for {file_path}: {e}")
+        updated_files = set()
+        logging.info("Updating clusters in the database for %d rows...", len(self.combined_df))
+        for idx, row in self.combined_df.iterrows():
+            file1, file2, cluster_id = row['file1'], row['file2'], row['cluster']
+            for file in [file1, file2]:
+                if file not in updated_files:
+                    try:
+                        await AsyncDatabase.update_one(
+                            self.api_connection.file_tracking_collection,
+                            {'path': file},
+                            {'$set': {'cluster': cluster_id}}
+                        )
+                        updated_files.add(file)
+                        logging.debug("Updated cluster ID %d for file %s", cluster_id, file)
+                    except Exception as e:
+                        logging.error(f"Failed to save cluster for {file}: {e}")
 
-        logging.info("Cluster IDs saved to database.")
+            if idx % 100 == 0:
+                logging.info("Processed %d/%d rows for cluster updates.", idx, len(self.combined_df))
+
+        logging.info("All cluster IDs updated in the database.")
 
         self.analyse_clusters()
 
-        logging.info("Plotting clusters")
-        self.plotter.plot_clusters(self.df_for_clustering)
+        logging.info("Plotting clusters...")
+        self.plotter.plot_clusters(self.combined_df)
+
+        logging.info("Clustering analysis completed.")
+        return self.combined_df
 
     def analyse_clusters(self):
         """
-        Analyzes each cluster and saves visualisations and summaries for each cluster.
+        Analyses each cluster and saves visualisations and summaries for each cluster.
         """
         cluster_summary = {}
-        for cluster in self.df_for_clustering['cluster'].unique():
-            cluster_data = self.df_for_clustering[self.df_for_clustering['cluster'] == cluster]
+        if 'cooccurrence_scaled' not in self.combined_df.columns or 'distance_scaled' not in self.combined_df.columns:
+            self.logger.error("Scaled columns are missing. Ensure data is scaled before analysis.")
+            return
+
+        for cluster in self.combined_df['cluster'].unique():
+            cluster_data = self.combined_df[self.combined_df['cluster'] == cluster]
             avg_cooccurrence = cluster_data['cooccurrence'].mean()
             avg_distance = cluster_data['distance'].mean()
             file_pairs = cluster_data[['file1', 'file2']].values
@@ -122,7 +140,15 @@ class ClusterAnalyser:
     def extract_features(self):
         features_list = []
 
-        for file in self.df_for_clustering['file1'].unique():
-            cluster = self.df_for_clustering.loc[self.df_for_clustering['file1'] == file, 'cluster'].values[0]
-            co_occurrence = self.df_for_clustering.loc[self.df_for_clustering['file1'] == file, 'cooccurrence'].sum()
+        unique_files = pd.concat([self.combined_df['file1'], self.combined_df['file2']]).unique()
+        for file in unique_files:
+            rows_with_file = self.combined_df[
+                (self.combined_df['file1'] == file) | (self.combined_df['file2'] == file)
+                ]
+            cluster = rows_with_file['cluster'].mode()[0]  # Assign the most common cluster
+            co_occurrence = rows_with_file['cooccurrence'].sum()
+
+            features_list.append({'file': file, 'cluster': cluster, 'cooccurrence': co_occurrence})
+
+        return pd.DataFrame(features_list)
 

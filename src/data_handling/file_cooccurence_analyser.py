@@ -37,27 +37,47 @@ class FileCooccurenceAnalyser:
         self.commit_data = commit_data
         self.file_features = file_features
         self.api_connection = api_connection
+        self.project_name = project_name
 
         self.plotter = Plotter(project_name=project_name)
         self.cooccurence_matrix = defaultdict(lambda: defaultdict(int))
 
-    async def run(self):
-        self.logging.info("Running file co-occurrence analyser")
+    async def run(self, recluster=False):
+        save_paths = {
+            "combined_df": f"{self.project_name}/combined_df.parquet",
+            "cooccurrence_df": f"{self.project_name}/cooccurrence_df.parquet",
+            "cooccurrence_categorized_df": f"{self.project_name}/cooccurrence_categorized_df.parquet",
+            "proximity_df": f"{self.project_name}/proximity_df.parquet",
+        }
 
-        cooccurrence_categorized_df, cooccurrence_df = self.build_cooccurrence_matrix()
-        proximity_df = self.calculate_directory_proximity(cooccurrence_df)
-        combined_df = self.combine_proximity_cooccurrence(proximity_df, cooccurrence_df)
+        if recluster or not any(os.path.exists(path) for path in save_paths.values()):
+            self.logging.info("Generating new clustering...")
 
-        self.plot(cooccurrence_df, cooccurrence_categorized_df, proximity_df, combined_df)
-        self.plot_hierarchical_cooccurrence(cooccurrence_df)
+            cooccurrence_categorized_df, cooccurrence_df = self.build_cooccurrence_matrix()
+            proximity_df = self.calculate_directory_proximity(cooccurrence_df)
+            combined_df = self.combine_proximity_cooccurrence(proximity_df, cooccurrence_df)
 
-        self.get_combined_data_matrix(combined_df)
+            self.plot(cooccurrence_df, cooccurrence_categorized_df, proximity_df, combined_df)
 
-        cluster_analyser = ClusterAnalyser(combined_df, self.plotter, self.api_connection)
-        optimal_k = cluster_analyser.find_optimal_clusters()
-        await cluster_analyser.run_clustering_analysis(k=optimal_k)
+            self.get_combined_data_matrix(combined_df)
 
-        return combined_df
+            cluster_analyser = ClusterAnalyser(combined_df, self.plotter, self.api_connection)
+            optimal_k = cluster_analyser.find_optimal_clusters()
+            combined_df = await cluster_analyser.run_clustering_analysis(k=optimal_k)
+
+            cooccurrence_df.to_parquet(save_paths["cooccurrence_df"])
+            cooccurrence_categorized_df.to_parquet(save_paths["cooccurrence_categorized_df"])
+            proximity_df.to_parquet(save_paths["proximity_df"])
+            combined_df.to_parquet(save_paths["combined_df"])
+
+        else:
+            self.logging.info(f"Loading saved clustering dataframes from disk for project: {self.project_name}")
+            cooccurrence_df = pd.read_parquet(save_paths["cooccurrence_df"])
+            cooccurrence_categorized_df = pd.read_parquet(save_paths["cooccurrence_categorized_df"])
+            proximity_df = pd.read_parquet(save_paths["proximity_df"])
+            combined_df = pd.read_parquet(save_paths["combined_df"])
+
+        return cooccurrence_df, cooccurrence_categorized_df, proximity_df, combined_df
 
     def build_cooccurrence_matrix(self):
 
@@ -151,6 +171,9 @@ class FileCooccurenceAnalyser:
             how='left'
         )
 
+        combined_df['path_file1'] = combined_df['file1']
+        combined_df['path_file2'] = combined_df['file2']
+
         self.scaler = StandardScaler()
         combined_df[['cooccurrence_scaled', 'distance_scaled']] = self.scaler.fit_transform(
             combined_df[['cooccurrence', 'distance']]
@@ -169,12 +192,67 @@ class FileCooccurenceAnalyser:
 
         return combined_df
 
-    def plot(self, cooccurrence_df, cooccurrence_categorized_df, proximity_df, combined_df):
-        self.plotter.plot_cooccurrence_matrix(cooccurrence_categorized_df, top_n_files=15)
-        self.plotter.plot_proximity_matrix(proximity_df)
-        self.plotter.plot_proximity_histogram(proximity_df)
-        self.plotter.plot_distance_vs_cooccurrence(combined_df)
-        self.plotter.plot_zipf_distribution(cooccurrence_df)
+    def plot(self, cooccurrence_df, cooccurrence_categorized_df, proximity_df, combined_df, plot_options=None):
+        if plot_options is None:
+            plot_options = {}
+
+        # Hierarchical Co-Occurrence
+        if plot_options.get('hierarchical', True):
+            self.plot_hierarchical_cooccurrence(cooccurrence_df)
+
+        # Co-Occurrence Matrix
+        if plot_options.get('cooccurrence_matrix', True):
+            top_n_files = plot_options.get('top_n_files', 15)
+            cooccurrence_data_type = plot_options.get('cooccurrence_data', 'categorised')
+
+            if cooccurrence_data_type == 'categorised':
+                logging.info("Using categorised co-occurrence data for the matrix plot.")
+                category_to_num = {'Low': 0, 'Middle': 1, 'High': 2}
+                cooccurrence_data = cooccurrence_categorized_df.apply(lambda col: col.map(category_to_num).fillna(0))
+                value_label = 'Category'
+
+            elif cooccurrence_data_type == 'raw':
+                logging.info("Using raw co-occurrence data for the matrix plot.")
+                cooccurrence_data = cooccurrence_df
+                value_label = 'Co-occurrence'
+
+            else:
+                logging.error(
+                    f"Invalid cooccurrence_data value: {cooccurrence_data_type}. Expected 'categorised' or 'raw'.")
+                raise ValueError(f"Invalid cooccurrence_data: {cooccurrence_data_type}")
+
+                # Call the plot function with the selected data
+            self.plotter.plot_cooccurrence_matrix(
+                cooccurrence_data,
+                top_n_files=top_n_files,
+                value_label=value_label
+            )
+
+        if plot_options.get('proximity_matrix', True):
+            self.plotter.plot_proximity_matrix(proximity_df)
+
+        if plot_options.get('proximity_histogram', True):
+            self.plotter.plot_proximity_histogram(proximity_df)
+
+        if plot_options.get('distance_vs_cooccurrence', True):
+            data_type = plot_options.get('distance_vs_cooccurrence_data', 'raw')
+            if data_type not in ['raw', 'scaled']:
+                logging.error(f"Invalid distance_vs_cooccurrence_data option: {data_type}. Expected 'raw' or 'scaled'.")
+                raise ValueError(f"Invalid distance_vs_cooccurrence_data: {data_type}")
+
+            scaled = data_type == 'scaled'
+            data_to_plot = combined_df
+
+            logging.info(f"Plotting distance vs. co-occurrence with {'scaled' if scaled else 'raw'} data.")
+
+            if data_to_plot.isnull().values.any():
+                logging.warning(
+                    "Data for distance vs. co-occurrence contains NaN values. These will be ignored in the plot.")
+
+            self.plotter.plot_distance_vs_cooccurrence(data_to_plot, scaled=scaled)
+
+        if plot_options.get('zipf_distribution', True):
+            self.plotter.plot_zipf_distribution(cooccurrence_df)
 
     def plot_hierarchical_cooccurrence(self, cooccurrence_df):
         if cooccurrence_df.isnull().values.any():

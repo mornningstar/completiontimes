@@ -32,15 +32,14 @@ class FileFeatureEngineer:
         """
                 Calculate rolling and cumulative metrics for files.
         """
-        file_df.ffill(inplace=True)  # Forward-fill missing values
-        file_df.bfill(inplace=True)  # Backward-fill missing values
-        file_df.dropna(subset=["size"], inplace=True)  # Drop rows where size is still NaN
+        file_df.dropna(subset=["size"], inplace=True)  # Drop rows where size is missing
+        file_df.sort_values(["path", "date"], inplace=True)
 
         grouped = file_df.groupby("path")
-
         metrics = []
+
         for path, group in grouped:
-            group = group.set_index("date")  # Use date as index for rolling calculations
+            group = group.set_index("date").sort_index()  # Use date as index for rolling calculations
             group["size"] = pd.to_numeric(group["size"], errors="coerce")
             group = group.dropna(subset=["size"])  # Drop rows where size is NaN
 
@@ -82,9 +81,8 @@ class FileFeatureEngineer:
 
             group["rolling_mean_to_std_ratio"] = group["rolling_mean_to_std_ratio"].replace([np.inf, -np.inf], 0)
 
-            metrics.append(group)
+            metrics.append(group.reset_index())
 
-        # Combine all the groups back into a single DataFrame
         return pd.concat(metrics)
 
     async def save_features_to_db(self, file_features):
@@ -94,14 +92,10 @@ class FileFeatureEngineer:
         grouped_features = file_features.groupby("path")
 
         for path, group in grouped_features:
-            features = group.to_dict(orient="records")  # Each record corresponds to a commit
-
-            # Update the corresponding file entry in the database
+            features = group.reset_index().to_dict(orient="records")
             query = {"path": path}
             update = {"$set": {"features": features}}  # Save features as a list under "features"
-            await AsyncDatabase.update_one(
-                self.api_connection.file_tracking_collection, query, update
-            )
+            await AsyncDatabase.update_one(self.api_connection.file_tracking_collection, query, update)
 
     async def run(self):
         """
