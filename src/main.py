@@ -51,7 +51,7 @@ async def process_project(project):
             cooccurrence_analyser = FileCooccurenceAnalyser(
                 commit_visualiser.commit_data, project_name, api_connection, all_file_features
             )
-            cluster_combined_df = cooccurrence_analyser.run()
+            cluster_combined_df = await cooccurrence_analyser.run()
 
         for target, config in file_modeling_tasks.items():
             cluster_enabled = config.get('cluster', False)

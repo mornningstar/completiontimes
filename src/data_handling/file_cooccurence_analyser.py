@@ -41,7 +41,7 @@ class FileCooccurenceAnalyser:
         self.plotter = Plotter(project_name=project_name)
         self.cooccurence_matrix = defaultdict(lambda: defaultdict(int))
 
-    def run(self):
+    async def run(self):
         self.logging.info("Running file co-occurrence analyser")
 
         cooccurrence_categorized_df, cooccurrence_df = self.build_cooccurrence_matrix()
@@ -55,7 +55,7 @@ class FileCooccurenceAnalyser:
 
         cluster_analyser = ClusterAnalyser(combined_df, self.plotter, self.api_connection)
         optimal_k = cluster_analyser.find_optimal_clusters()
-        cluster_analyser.run_clustering_analysis(k=optimal_k)
+        await cluster_analyser.run_clustering_analysis(k=optimal_k)
 
         return combined_df
 

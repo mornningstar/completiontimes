@@ -15,10 +15,11 @@ PROJECTS = [
                 'cluster': True
                 }
             }
+        },
+        'general_config': {
+            'historical_validation_split': 0.8,  # Define split ratio for historical validation
+            'time_horizon': 30,  # Define prediction horizon (e.g., for no-commit probability)
+            'auto_tune': True,  # Enable/disable auto-tuning for models
         }
-        #'name': 'mozilla/addons-server',
     },
-    #{
-        #'name': 'openedx/edx-platform'
-    #}
 ]

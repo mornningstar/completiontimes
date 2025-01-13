@@ -1,5 +1,7 @@
 .idea
 __pycache__/
-/images
+images/
 .DS_Store
 venv
+
+cluster_summary.csv
