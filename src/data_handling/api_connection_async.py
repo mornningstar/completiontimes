@@ -309,7 +309,7 @@ class APIConnectionAsync:
 
         if update:
             if affected_files:
-                files_to_iterate = [{'path': path} for path in affected_files]
+                files_to_iterate = affected_files
             else:
                 logging.info("No files to process.")
                 return

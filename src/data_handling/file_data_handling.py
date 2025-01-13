@@ -4,34 +4,6 @@ from sklearn.model_selection import train_test_split
 
 from src.data_handling.async_database import AsyncDatabase
 
-def add_features(dataframe, size_col='size', window=7):
-    dataframe[f'rolling_{window}_size'] = dataframe[size_col].rolling(window=window).mean()
-    dataframe[f'rolling_{window}_std'] = dataframe[size_col].rolling(window=window).std()
-    dataframe[f'rolling_{window}_max'] = dataframe[size_col].rolling(window=window).max()
-    dataframe[f'rolling_{window}_min'] = dataframe[size_col].rolling(window=window).min()
-    dataframe[f'rolling_{window}_median'] = dataframe[size_col].rolling(window=window).median()
-    dataframe[f'rolling_{window}_var'] = dataframe[size_col].rolling(window=window).var()
-
-    # Exponential moving average (EMA) of file size
-    dataframe['size_ema'] = dataframe[size_col].ewm(span=window, adjust=False).mean()
-
-    # Cumulative file size
-    dataframe['cumulative_size'] = dataframe[size_col].cumsum()
-    dataframe['cumulative_mean'] = dataframe[size_col].expanding().mean()
-    dataframe['cumulative_std'] = dataframe[size_col].expanding().std()
-
-    # Lag features
-    for lag in range(1, window + 1):
-        dataframe[f'lag_{lag}_size'] = dataframe[size_col].shift(lag)
-
-    dataframe['absolute_change'] = dataframe[size_col].diff().abs()
-    dataframe['percentage_change'] = dataframe[size_col].pct_change() * 100
-
-    dataframe['rolling_mean_to_std_ratio'] = dataframe[f'rolling_{window}_size'] / dataframe[f'rolling_{window}_std']
-    dataframe['rolling_mean_to_std_ratio'].replace([np.inf, -np.inf], 0, inplace=True)
-
-    return dataframe
-
 class FileDataHandler:
     def __init__(self, api_connection, file_path):
         self.api_connection = api_connection
@@ -44,35 +16,41 @@ class FileDataHandler:
         self.process_data()
 
     async def fetch_data(self):
+        """
+                Fetch the file data including precomputed features from the database.
+        """
         query = {"path": self.file_path}
-        #projection = {"commit_history": 1, "_id": 0}
-        self.file_data = await AsyncDatabase.find(self.api_connection.file_tracking_collection, query)#, projection)
-        print(f"File data: {len(self.file_data)}")
-        print(self.file_data)
+        projection = {"commit_history": 1, "features": 1, "_id": 0}  # Fetch only relevant fields
+        self.file_data = await AsyncDatabase.find(self.api_connection.file_tracking_collection, query, projection)
+        if not self.file_data:
+            raise ValueError(f"No data found for file: {self.file_path}")
+        print(f"Fetched data for {self.file_path}: {self.file_data}")
+
 
     def process_data(self):
-        times = []
-        sizes = []
+        commit_history = self.file_data[0].get("commit_history", [])
+        features = self.file_data[0].get("features", [])
 
-        for record in self.file_data:
-            for commit in record.get('commit_history', []):
-                commit_date = pd.to_datetime(commit['date'])
-                file_size = commit.get('size', 0)
+        # Create a DataFrame for commit history
+        history_df = pd.DataFrame(commit_history)
+        history_df["date"] = pd.to_datetime(history_df["date"])
+        history_df.set_index("date", inplace=True)
 
-                times.append(commit_date)
-                sizes.append(file_size)
+        # Create a DataFrame for features
+        features_df = pd.DataFrame(features)
+        features_df["date"] = pd.to_datetime(features_df["date"])
+        features_df.set_index("date", inplace=True)
 
-        df = pd.DataFrame({
-            'time': times,
-            'size': sizes
-        })
+        # Merge the two DataFrames on the date index
+        self.filedata_df = history_df.merge(features_df, how="outer", left_index=True, right_index=True)
 
-        df.set_index('time', inplace=True)
-        df.index = pd.DatetimeIndex(df.index)
-        df.sort_values(by='time', inplace=True)
-        self.filedata_df = df.resample('D').ffill()
+        # Ensure data is sorted and resampled daily
+        self.filedata_df.sort_index(inplace=True)
+        self.filedata_df = self.filedata_df.resample('D').ffill()  # Fill missing dates
 
-        self.filedata_df = add_features(self.filedata_df)
+        # Handle any remaining missing values if necessary
+        self.filedata_df.ffill(inplace=True)
+        self.filedata_df.bfill(inplace=True)
 
     def prepare_arima_data(self, target, test_size=0.2):
         if target not in self.filedata_df.columns:
@@ -162,3 +140,23 @@ class FileDataHandler:
 
         return x_train, y_train, x_test, y_test
 
+    def aggregate_cluster_features(self, combined_df, feature_name):
+        cluster_time_series = {}
+
+        for cluster_id in combined_df['cluster'].unique():
+            cluster_files = combined_df[combined_df['cluster'] == cluster_id]
+
+            file_features = []
+            for _, row in cluster_files.iterrows():
+                file1_features = self.file_features[self.file_features['path'] == row['file1']]
+                file2_features = self.file_features[self.file_features['path'] == row['file2']]
+                file_features.append(pd.concat([file1_features, file2_features]))
+
+            # Combine and sort features by date
+            cluster_feature_df = pd.concat(file_features).sort_values('date')
+
+            # Aggregate the feature across all files in the cluster
+            time_series = cluster_feature_df.groupby('date')[feature_name].mean()
+            cluster_time_series[cluster_id] = time_series
+
+        return cluster_time_series

@@ -1,15 +1,21 @@
+import logging
+
 import pandas as pd
 from kneed import KneeLocator
 from matplotlib import pyplot as plt
 from sklearn.cluster import KMeans
 
+from src.data_handling.async_database import AsyncDatabase
+
 
 class ClusterAnalyser:
-    def __init__(self, df_for_clustering, plotter):
+    def __init__(self, df_for_clustering, plotter, api_connection):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.df_for_clustering = df_for_clustering
         self.numerical_df_for_clustering = self.df_for_clustering[['cooccurrence_scaled', 'distance_scaled']]
 
         self.plotter = plotter
+        self.api_connection = api_connection
 
         self.optimal_k = None
 
@@ -18,6 +24,7 @@ class ClusterAnalyser:
         Finds the optimal number of clusters for given data using the Elbow Method.
         :param max_k: Maximum number of clusters to try.
         """
+        logging.info("Finding optimal number of clusters")
         inertia = []
         k_range = range(1, max_k + 1)
 
@@ -42,13 +49,15 @@ class ClusterAnalyser:
 
         self.plotter.save_plot("optimal_k.png")
 
-    def run_clustering_analysis(self, k=4):
+        logging.info("Found optimal number of clusters at k = {}".format(self.optimal_k))
+        return self.optimal_k
+
+    async def run_clustering_analysis(self, k=4):
         """
         Performs KMeans clustering with the specified number of clusters (k) and
         analyses the resulting clusters.
         """
-        # Ensure we only use the scaled numeric columns for clustering
-        #data = self.df_for_clustering[['cooccurrence_scaled', 'distance_scaled']]
+        logging.info("Running clustering analysis")
 
         kmeans = KMeans(n_clusters=k, random_state=42)
         cluster_labels = kmeans.fit_predict(self.numerical_df_for_clustering)
@@ -56,8 +65,22 @@ class ClusterAnalyser:
         # Cluster labels are added to original combined_df
         self.df_for_clustering['cluster'] = cluster_labels
 
+        # Save cluster labels to the database
+        for file_path, cluster_id in zip(self.df_for_clustering['path'], cluster_labels):
+            try:
+                await AsyncDatabase.update_one(
+                    self.api_connection.file_tracking_collection,
+                    {'path': file_path},
+                    {'$set': {'cluster': cluster_id}}
+                )
+            except Exception as e:
+                logging.error(f"Failed to save cluster for {file_path}: {e}")
+
+        logging.info("Cluster IDs saved to database.")
+
         self.analyse_clusters()
 
+        logging.info("Plotting clusters")
         self.plotter.plot_clusters(self.df_for_clustering)
 
     def analyse_clusters(self):

@@ -1,30 +1,100 @@
+import logging
+
 import numpy as np
 import keras_tuner as kt
+from keras import Sequential
 from keras.src.callbacks import EarlyStopping
+from keras.src.layers import LSTM, Dropout, Dense
 from keras.src.optimizers import Adam
-from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
-
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.regularizers import l2
 from sklearn.preprocessing import StandardScaler
-from keras import Sequential, Input
+
 
 from src.predictions.base_model import BaseModel
 
 
 class LSTMModel(BaseModel):
-    def __init__(self, timesteps=10, units=5, dropout_rate=0.5, epochs=20):
+    def __init__(self):#, timesteps=10, units=5, dropout_rate=0.5, epochs=20):
+        super().__init__()
         self.num_features = None
-        self.timesteps = timesteps
-        self.units = units
-        self.dropout_rate = dropout_rate
-        self.epochs = epochs
-
-        self.x_scaler = StandardScaler()
-        self.y_scaler = StandardScaler()
-        self.model = None
+        self.scaler_x = StandardScaler()
+        self.scaler_y = StandardScaler()
 
     def build_model(self, hp):
+        model = Sequential()
+        model.add(LSTM(
+            hp.Int('units', 16, 128, step=16),
+            input_shape=(None, self.num_features))
+        )
+        model.add(Dropout(hp.Float('dropout', 0.1, 0.5, step=0.1)))
+        model.add(Dense(1))
+        model.compile(optimizer=Adam(learning_rate=hp.Choice('lr', [1e-2, 1e-3, 1e-4])), loss="mse")
+
+        return model
+
+    def scale_data(self, x_data, y_data=None, fit=True):
+        """
+        Scales the input features and target variables.
+        """
+        x_shape = x_data.shape
+        x_data_flat = x_data.reshape(-1, x_shape[2])  # Flatten for scaling
+
+        if fit:
+            x_data_scaled = self.scaler_x.fit_transform(x_data_flat)
+        else:
+            x_data_scaled = self.scaler_x.transform(x_data_flat)
+
+        x_data_scaled = x_data_scaled.reshape(x_shape)  # Reshape back to original shape
+
+        if y_data is not None:
+            if fit:
+                y_data_scaled = self.scaler_y.fit_transform(y_data.reshape(-1, 1)).flatten()
+            else:
+                y_data_scaled = self.scaler_y.transform(y_data.reshape(-1, 1)).flatten()
+            return x_data_scaled, y_data_scaled
+
+        return x_data_scaled
+
+    def train(self, x_train, y_train):
+        if x_train.ndim != 3 or y_train.ndim != 1:
+            raise ValueError("x_train must have shape (samples, timesteps, features) and y_train must be 1D.")
+
+        self.num_features = x_train.shape[2]
+
+        tuner = kt.RandomSearch(
+            self.build_model,
+            objective="val_loss",
+            max_trials=5,
+            overwrite=True
+        )
+
+        early_stop = EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True)
+
+        tuner.search(
+            x_train, y_train,
+            epochs=10,
+            validation_split=0.1,
+            callbacks=[early_stop]
+        )
+
+        self.model = tuner.get_best_models(1)[0]
+        logging.info(f"Best hyperparameters: {tuner.get_best_hyperparameters(1)[0].values}")
+
+    def evaluate(self, x_test, y_test):
+        predictions = self.model.predict(x_test).flatten()
+        mse = np.mean((y_test - predictions) ** 2)
+        mae = np.mean(np.abs(y_test - predictions))
+        rmse = np.sqrt(mse)
+        return predictions, mse, mae, rmse
+
+    def save_best_model(self, filepath):
+        self.model.save(filepath)
+        print(f"Best model saved at {filepath}")
+
+    def load_best_model(self, filepath):
+        self.model = keras.models.load_model(filepath)
+        print(f"Best model loaded from {filepath}")
+
+    '''def build_model(self, hp):
         units = hp.Int('units', min_value=2, max_value=100, step=16)
         dropout_rate = hp.Float('dropout_rate', min_value=0.1, max_value=0.5, step=0.1)
         learning_rate = hp.Choice('learning_rate', values=[1e-3, 1e-4, 1e-5])
@@ -124,4 +194,4 @@ class LSTMModel(BaseModel):
 
         print(f"Evaluate ended. MSE: {mse}, MAE: {mae}, RMSE: {rmse}")
 
-        return predictions, mse, mae, rmse
+        return predictions, mse, mae, rmse'''

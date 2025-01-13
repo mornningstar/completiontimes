@@ -14,8 +14,6 @@ class SeasonalARIMABase(BaseModel):
     def __init__(self):
         super().__init__()
 
-        self.scaler = StandardScaler()
-
         self.fitted_model = None
         self.order = None
         self.seasonal_order = None
@@ -76,9 +74,24 @@ class SeasonalARIMABase(BaseModel):
         d = 0 if stationary else 1
 
         # Detect seasonality
-        seasonal_period = self.detect_seasonality(y_train, max_lag=365)
+        seasonal_period = self.detect_seasonality(y_train)
 
-        if seasonal_period is not None and seasonal_period > 52:  # Cap seasonal period to 52 weeks
+        if seasonal_period:
+            self.model = pmd.auto_arima(
+                y_train, start_p=0, start_q=0, max_p=3, max_q=3,
+                d=d, seasonal=True, m=seasonal_period,
+                stepwise=True, trace=True
+            )
+        else:
+            self.model = pmd.auto_arima(
+                y_train, start_p=0, max_p=5, start_q=0, max_q=4,
+                d=d, seasonal=False, stepwise=True
+            )
+
+        self.order = self.model.order
+        self.seasonal_order = getattr(self.model, 'seasonal_order', None)
+
+        '''if seasonal_period is not None and seasonal_period > 52:  # Cap seasonal period to 52 weeks
             print(f"Seasonal period {seasonal_period} too large. Reducing to 52.")
             seasonal_period = 52
 
@@ -105,21 +118,16 @@ class SeasonalARIMABase(BaseModel):
 
             print(self.model.summary())
         except MemoryError as e:
-            print(f"Memory error: {e}.")
+            print(f"Memory error: {e}.")'''
 
     def train(self, x_train=None, y_train=None):
         """
         Train the model using either ARIMA or SARIMA.
         """
-        if y_train is None:
-            raise ValueError("y_train cannot be None for ARIMA/SARIMA models.")
-
         y_train_scaled = self.scale_data(y_train)
+        self.auto_tune(y_train_scaled)
 
-        if self.model is None:
-            self.auto_tune(y_train_scaled)
-
-        if self.order and self.seasonal_order:
+        if self.seasonal_order:
             # Use SARIMA
             self.fitted_model = ARIMA(y_train_scaled, order=self.order, seasonal_order=self.seasonal_order).fit()
         else:
@@ -140,8 +148,7 @@ class SeasonalARIMABase(BaseModel):
         """
         Evaluate the model's performance.
         """
-        steps = len(y_test)
-        predictions = self.predict(steps)
+        predictions = self.predict(len(y_test))
 
         mse = mean_squared_error(y_true=y_test, y_pred=predictions)
         mae = mean_absolute_error(y_true=y_test, y_pred=predictions)

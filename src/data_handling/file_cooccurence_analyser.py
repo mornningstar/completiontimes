@@ -1,3 +1,4 @@
+import logging
 import os
 from collections import defaultdict
 from itertools import combinations
@@ -23,22 +24,25 @@ def categorise(value, max_value):
 
 
 class FileCooccurenceAnalyser:
-    def __init__(self, commit_data, project_name):
+    def __init__(self, commit_data, project_name, api_connection, file_features=None):
         """
         Initialises the file co-occurrence analyser for specified commit data and project name.
         :param commit_data: Commit data from the database
         :param project_name: Name of the project
         """
 
+        self.logging = logging.getLogger(self.__class__.__name__)
+        self.scaler = None
         self.optimal_k = None
         self.commit_data = commit_data
+        self.file_features = file_features
+        self.api_connection = api_connection
 
         self.plotter = Plotter(project_name=project_name)
-
         self.cooccurence_matrix = defaultdict(lambda: defaultdict(int))
 
     def run(self):
-        print("Running file co-occurrence analyser")
+        self.logging.info("Running file co-occurrence analyser")
 
         cooccurrence_categorized_df, cooccurrence_df = self.build_cooccurrence_matrix()
         proximity_df = self.calculate_directory_proximity(cooccurrence_df)
@@ -49,9 +53,11 @@ class FileCooccurenceAnalyser:
 
         self.get_combined_data_matrix(combined_df)
 
-        cluster_analyser = ClusterAnalyser(combined_df, self.plotter)
-        cluster_analyser.find_optimal_clusters()
-        cluster_analyser.run_clustering_analysis()
+        cluster_analyser = ClusterAnalyser(combined_df, self.plotter, self.api_connection)
+        optimal_k = cluster_analyser.find_optimal_clusters()
+        cluster_analyser.run_clustering_analysis(k=optimal_k)
+
+        return combined_df
 
     def build_cooccurrence_matrix(self):
 
@@ -129,10 +135,37 @@ class FileCooccurenceAnalyser:
 
         combined_df = pd.DataFrame(combined_data)
 
-        scaler = StandardScaler()
-        combined_df[['cooccurrence_scaled', 'distance_scaled']] = scaler.fit_transform(
+        # Add metrics from all_file_features
+        combined_df = combined_df.merge(
+            self.file_features,
+            left_on='file1',
+            right_on='path',
+            how='left'
+        )
+
+        combined_df = combined_df.merge(
+            self.file_features,
+            left_on='file2',
+            right_on='path',
+            suffixes=('_file1', '_file2'),
+            how='left'
+        )
+
+        self.scaler = StandardScaler()
+        combined_df[['cooccurrence_scaled', 'distance_scaled']] = self.scaler.fit_transform(
             combined_df[['cooccurrence', 'distance']]
         )
+
+        numerical_cols = [col for col in combined_df.columns if
+                          'size' in col or 'rolling' in col or 'cumulative' in col]
+
+        for col in numerical_cols:
+            combined_df[f'{col}_scaled'] = self.scaler.fit_transform(combined_df[[col]])
+
+        for col in ['cooccurrence', 'distance']:
+            if combined_df[col].isnull().any():
+                self.logging.warning(f"NaN values found in {col}. Filling with 0.")
+                combined_df[col].fillna(0, inplace=True)
 
         return combined_df
 
@@ -144,11 +177,17 @@ class FileCooccurenceAnalyser:
         self.plotter.plot_zipf_distribution(cooccurrence_df)
 
     def plot_hierarchical_cooccurrence(self, cooccurrence_df):
+        if cooccurrence_df.isnull().values.any():
+            logging.warning("NaN values in cooccurrence_df. Filling with 0.")
+            cooccurrence_df = cooccurrence_df.fillna(0)
+
         max_cooccurrence = cooccurrence_df.values.max()
         normalized_cooccurrence = cooccurrence_df.fillna(0) / max_cooccurrence
-        distance_matrix = 1 - normalized_cooccurrence
 
+        distance_matrix = 1 - normalized_cooccurrence
         np.fill_diagonal(distance_matrix.values, 0)
+
+        #distance_matrix = np.clip(distance_matrix, 0, 1)
 
         linked = linkage(squareform(distance_matrix), method='ward')
 

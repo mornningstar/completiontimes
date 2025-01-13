@@ -160,26 +160,31 @@ class Plotter:
         self.save_plot("proximity_histogram.png")
 
     def plot_distance_vs_cooccurrence(self, combined_df):
+        """
+        Uses the scaled distance and co-occurrence.
+        :param combined_df:
+        :return:
+        """
         plt.figure(figsize=(12, 8))
 
         # Use 'hue' to color by cooccurrence_level and 'style' to differentiate by distance_level
         sns.scatterplot(
             data=combined_df,
-            x='distance',
-            y='cooccurrence',
+            x='distance_scaled',
+            y='cooccurrence_scaled',
             hue='cooccurrence_level',
             style='distance_level',
             palette='viridis',
             s=100  # increase point size for better visibility
         )
 
-        plt.title('Directory Distance vs. Co-occurrence')
-        plt.xlabel('Directory Distance')
-        plt.ylabel('Co-occurrence')
+        plt.title('Scaled Directory Distance vs. Co-occurrence')
+        plt.xlabel('Directory Distance (Scaled)')
+        plt.ylabel('Co-occurrence (Scaled)')
         plt.legend(title='Levels')
         plt.tight_layout()
 
-        self.save_plot("distance_vs_cooccurrence.png")
+        self.save_plot("distance_vs_cooccurrence_scaled.png")
 
     def plot_distance_vs_cooccurrence_matrix(self, matrix):
         plt.figure(figsize=(6, 6))
@@ -206,14 +211,6 @@ class Plotter:
         plt.legend()
 
         self.save_plot("commits.png")
-
-    def plot_prophet_predictions(self, df, model_info, task):
-        plt.figure(figsize=(12, 6))
-
-        plt.step(df.index, df[task], label=f'Historical {task.capitalize()}', color='blue',
-                 linestyle='solid')
-
-
 
     def plot_lstm_predictions(self, commits_df, model_info, task):
         plt.figure(figsize=(12, 6))
@@ -294,11 +291,12 @@ class Plotter:
         plt.legend()
 
         self.save_plot(f'commit_predictions_{task}.png')
-
-    def plot_predictions(self, filedata_df, model_info, file_path, target):
+    '''
+    def plot_predictions(self, filedata_df, model_info, label, target):
         plt.figure(figsize=(12, 6))
 
-        plt.step(filedata_df.index, filedata_df[target], label=f'Historical {target.capitalize()}', color='blue', linestyle='solid')
+        plt.step(filedata_df.index, filedata_df[target], label=f'Historical {target.capitalize()}', color='blue',
+                 linestyle='solid')
 
         colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
         color_cycle = cycle(colors)
@@ -307,38 +305,82 @@ class Plotter:
             if model_name == "ProphetModel":
                 x_train_dates = pd.to_datetime(info['x_train'], errors='coerce').tz_localize(None)
                 x_test_dates = pd.to_datetime(info['x_test'], errors='coerce').tz_localize(None)
-
                 predictions = info['predictions']
             else:
                 x_train_dates = pd.to_datetime(info['x_train'].flatten())
                 x_test_dates = pd.to_datetime(info['x_test'].flatten())
-
                 predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
                     'predictions']
 
             last_train_point = info['y_train'].iloc[-1]
             last_train_date = x_train_dates[-1]
-
             predicted_df = pd.DataFrame({target: predictions}, index=x_test_dates)
-
             current_colour = next(color_cycle)
 
             plt.plot(predicted_df.index, predicted_df[target],
                      label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, '
-                        f'RMSE: {info["rmse"]:.2f})', linestyle='-', color=current_colour)
+                           f'RMSE: {info["rmse"]:.2f})', linestyle='-', color=current_colour)
 
             if not predicted_df.empty:
                 first_pred_target = predicted_df.iloc[0][target]
-                plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_target], color=current_colour,
-                         linestyle='-')
+                plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_target],
+                         color=current_colour, linestyle='-')
 
         plt.xlabel('Date')
         plt.ylabel(f'File {target.capitalize()}')
-        plt.title(f'{target.capitalize()} Over Time for {file_path}')
+        plt.title(f'{target.capitalize()} Over Time for {label}')
         plt.grid(True)
         plt.legend()
 
-        self.save_plot(f'predict_{target}_{file_path.replace("/", "_")}.png')
+        sanitized_label = label.replace("/", "_").replace(" ", "_")
+        self.save_plot(f'predict_{target}_{sanitized_label}.png')'''
+
+    def plot_predictions(self, filedata_df, model_info, label, target):
+        plt.figure(figsize=(12, 6))
+
+        # Plot actual data
+        plt.plot(filedata_df.index, filedata_df[target], label=f"Actual {target.capitalize()}", color='blue', linestyle='solid')
+
+        colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        color_cycle = cycle(colors)
+
+        for model_name, info in model_info.items():
+            # Prepare data for the specific model
+            if model_name == "ProphetModel":
+                x_train_dates = pd.to_datetime(info['x_train'], errors='coerce').tz_localize(None)
+                x_test_dates = pd.to_datetime(info['x_test'], errors='coerce').tz_localize(None)
+                predictions = info['predictions']
+            else:  # General handling (e.g., LSTM or others)
+                x_train_dates = pd.to_datetime(info['x_train'].flatten(), errors='coerce').tz_localize(None)
+                x_test_dates = pd.to_datetime(info['x_test'].flatten(), errors='coerce').tz_localize(None)
+                predictions = (info['predictions'].values
+                               if isinstance(info['predictions'], pd.Series)
+                               else info['predictions'])
+
+                # Plot predictions
+            current_color = next(color_cycle)
+            predicted_df = pd.DataFrame({target: predictions}, index=x_test_dates)
+            plt.plot(predicted_df.index, predicted_df[target],
+                     label=f'{model_name} Predictions (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, RMSE: {info["rmse"]:.2f})',
+                     color=current_color)
+
+            # Handle LSTM-specific connection (last train point to first prediction)
+            if model_name == "LSTMModel":
+                last_train_value = info['y_train'][-1]
+                first_prediction_value = predictions[0].item()
+                plt.plot([x_train_dates[-1], x_test_dates[0]], [last_train_value, first_prediction_value],
+                         linestyle='--', color=current_color)
+
+        plt.title(f'{target.capitalize()} Over Time for {label}')
+        plt.xlabel('Date')
+        plt.ylabel(f'{target.capitalize()}')
+        plt.legend()
+        plt.grid(True)
+
+        # Save plot with label in filename
+        sanitized_label = label.replace("/", "_").replace(" ", "_")
+        self.save_plot(f'predictions_{target}_{sanitized_label}.png')
+
 
     def plot_clusters(self, combined_df):
         """

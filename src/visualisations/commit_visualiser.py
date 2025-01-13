@@ -15,12 +15,13 @@ class CommitVisualiser:
         self.plotter = Plotter(project_name=project_name)
         self.data_handler = RepoDataHandler(api_connection, self.model_classes, self.modeling_tasks)
         self.model_trainer = ModelTrainer(self.model_classes, modeling_tasks=self.modeling_tasks)
+        self.commit_data = None
 
-        self.commits = None
+    async def get_commits(self):
+        await self.data_handler.run()
+        self.commit_data =  self.data_handler.commit_data
 
     async def run(self):
-        await self.data_handler.run()
-
         arima_data_splits = None
         lstm_data_splits = None
         other_data_splits = None
@@ -31,8 +32,6 @@ class CommitVisualiser:
             lstm_data_splits = self.data_handler.prepare_lstm_data()
         if any(model_class not in [SeasonalARIMABase, LSTMModel] for model_class in self.model_classes):
             other_data_splits = await self.data_handler.prepare_data()
-
-        self.commits = self.data_handler.commit_data
 
         for model in self.model_classes:
             if model == SeasonalARIMABase and arima_data_splits:
