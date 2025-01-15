@@ -17,7 +17,7 @@ class FileVisualiser:
         self.models = models
         self.api_connection = api_connection
         self.project_name = project_name
-        self.data_handler = FileDataHandler(self.api_connection, file_path)
+        self.data_handler = FileDataHandler(self.api_connection, file_path, targets, all_file_features)
         self.model_trainer = ModelTrainer(models)
         self.plotter = Plotter(self.project_name)
         self.file_path = file_path
@@ -29,6 +29,7 @@ class FileVisualiser:
         self.cluster = self.cluster_combined_df is not None
 
     def prepare_data(self, target, series=None, cluster=False):
+        print("Preparing data in Visualiser")
         if series is None:
             if not hasattr(self.data_handler, "filedata_df") or self.data_handler.filedata_df.empty:
                 raise ValueError("No valid data available to prepare.")
@@ -39,11 +40,12 @@ class FileVisualiser:
 
         return self.data_handler.prepare_model_specific_data(self.models, target, series)
 
-    async def run(self, mode="file"):
-        await self.data_handler.run()
-
+    async def run(self):
+        print("Run in visualiser")
         if not self.cluster:
+            await self.data_handler.run(cluster=False)
             for target in self.targets:
+
                 self.logging.info(f"Processing target: {target}")
 
                 x_train, x_test, y_train, y_test = self.prepare_data(target)
@@ -52,12 +54,14 @@ class FileVisualiser:
                 self.plotter.plot_predictions(self.data_handler.filedata_df, model_info, self.file_path, target)
 
         elif self.cluster and self.cluster_combined_df is not None:
+
             if not self.cluster_combined_df or "cluster" not in self.cluster_combined_df.columns:
                 raise ValueError(
                     "Cluster assignments (self.cluster_combined_df with 'cluster' column) are required for cluster mode."
                 )
 
             cluster_time_series = self.data_handler.aggregate_cluster_features(self.cluster_combined_df)
+            await self.data_handler.run(cluster=True, cluster_time_series=cluster_time_series)
 
             for cluster_id, series in cluster_time_series.items():
                 for target in self.targets:

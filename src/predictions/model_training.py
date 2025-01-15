@@ -1,7 +1,6 @@
 import logging
 import traceback
 
-from src.data_handling.file_data_handling import FileDataHandler
 from src.predictions.machine_learning.lstmmodel import LSTMModel
 
 
@@ -15,14 +14,19 @@ class ModelTrainer:
 
     def train_and_evaluate_model(self, x_train, y_train, x_test, y_test, use_clusters=False):
 
+        print("X_train\n",x_train[:10])
+        print("y_train\n",y_train[:10])
+        print("X_test\n",x_test[:10])
+        print("y_test\n",y_test[:10])
+
         model_info = {}
 
         for model_class in self.model_classes:
-            model_name = model_class.__name__
+            model_name = model_class.__class__.__name__
 
             try:
                 self.logger.info(f"Starting training for {model_name}")
-                model = model_class()
+                model = model_class
 
                 # Hyperparameter Tuning
                 if hasattr(model, 'auto_tune'):

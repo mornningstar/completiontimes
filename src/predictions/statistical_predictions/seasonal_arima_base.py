@@ -30,6 +30,7 @@ class SeasonalARIMABase(BaseModel):
         return p_value <= 0.05  # If p-value <= 0.05, data is stationary
 
     def detect_seasonality(self, data, max_lag=365, min_seasonality=7):
+
         acf_values = acf(data, nlags=max_lag, fft=True)
         acf_values[0] = 0  # Ignore lag-0
         seasonal_lag_acf = np.argmax(acf_values[:max_lag])
@@ -91,39 +92,16 @@ class SeasonalARIMABase(BaseModel):
         self.order = self.model.order
         self.seasonal_order = getattr(self.model, 'seasonal_order', None)
 
-        '''if seasonal_period is not None and seasonal_period > 52:  # Cap seasonal period to 52 weeks
-            print(f"Seasonal period {seasonal_period} too large. Reducing to 52.")
-            seasonal_period = 52
-
-        # Choose ARIMA or SARIMA based on seasonality detection
-        try:
-            if seasonal_period and seasonal_period <= 365:
-                print(f"Using SARIMA model with seasonality period: {seasonal_period}")
-                self.model = pmd.auto_arima(
-                    y_train, start_p=0, start_q=0, max_p=3, max_q=3,
-                    d=d, seasonal=True, m=seasonal_period,
-                    start_P=0, start_Q=0, max_P=2, max_Q=2,
-                    stepwise=True, max_d=2, D=1, max_D=1, trace=True
-                )
-                self.order = self.model.order
-                self.seasonal_order = self.model.seasonal_order
-            else:
-                print("Using non-seasonal ARIMA model.")
-                self.model = pmd.auto_arima(
-                    y_train, start_p=0, max_p=5,
-                    start_q=0, max_q=4, d=d,
-                    seasonal=False, stepwise=True
-                )
-                self.order = self.model.order
-
-            print(self.model.summary())
-        except MemoryError as e:
-            print(f"Memory error: {e}.")'''
+        self.logger.info(f"Selected ARIMA order: {self.order}")
+        if self.seasonal_order:
+            self.logger.info(f"Selected SARIMA seasonal order: {self.seasonal_order}")
 
     def train(self, x_train=None, y_train=None):
         """
         Train the model using either ARIMA or SARIMA.
         """
+        self.logger.info(f"Training model with order={self.order} and seasonal_order={self.seasonal_order}")
+
         y_train_scaled = self.scale_data(y_train)
         self.auto_tune(y_train_scaled)
 
@@ -153,5 +131,7 @@ class SeasonalARIMABase(BaseModel):
         mse = mean_squared_error(y_true=y_test, y_pred=predictions)
         mae = mean_absolute_error(y_true=y_test, y_pred=predictions)
         rmse = mse ** 0.5
+
+        self.logger.info(f"Evaluation - MSE: {mse}, MAE: {mae}, RMSE: {rmse}")
 
         return predictions, mse, mae, rmse

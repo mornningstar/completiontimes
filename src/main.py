@@ -45,7 +45,7 @@ async def process_file_visualiser(api_connection, project_name, file_path, commi
     try:
         await file_visualiser.run()
     except Exception as e:
-        logging.error(f"Error processing file/cluster for target {target}: {e}", exc_info=True)
+        logging.error(f"Error processing file/cluster for target {target}. The error: {e}", exc_info=True)
 
 
 async def process_project(project):
@@ -68,6 +68,8 @@ async def process_project(project):
         feature_engineer = FileFeatureEngineer(api_connection, project_name)
         all_file_features = await feature_engineer.run()  # Calculate features for all files
 
+        print(all_file_features.head(5))
+
         commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
         await commit_visualiser.get_commits()
 
@@ -87,7 +89,7 @@ async def process_project(project):
                 cooccurrence_categorized_df=cooccurrence_categorized_df,
                 proximity_df=proximity_df,
                 combined_df=cluster_combined_df,
-                **plot_options
+                plot_options=plot_options
             )
 
         tasks = []
@@ -102,14 +104,14 @@ async def process_project(project):
             ])
 
             if cluster_enabled and cluster_combined_df is not None:
-                tasks.append(
-                    process_file_visualiser(
-                        api_connection, project_name, None, commit_visualiser, models, target,
-                        all_file_features, cluster_combined_df=cluster_combined_df
-                    )
+                tasks.extend([process_file_visualiser(
+                    api_connection, project_name, None, commit_visualiser, models, target,
+                    all_file_features, cluster_combined_df=cluster_combined_df
+                )]
                 )
 
-            await asyncio.gather(*tasks)
+
+        await asyncio.gather(*tasks)
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))

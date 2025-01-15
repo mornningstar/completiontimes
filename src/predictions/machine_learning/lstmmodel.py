@@ -7,7 +7,7 @@ from keras.src.callbacks import EarlyStopping
 from keras.src.layers import LSTM, Dropout, Dense
 from keras.src.optimizers import Adam
 from sklearn.preprocessing import StandardScaler
-
+from tensorflow.python import keras
 
 from src.predictions.base_model import BaseModel
 

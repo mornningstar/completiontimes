@@ -35,11 +35,15 @@ class FileFeatureEngineer:
         file_df.dropna(subset=["size"], inplace=True)  # Drop rows where size is missing
         file_df.sort_values(["path", "date"], inplace=True)
 
+        file_df.set_index("date", inplace=True)
+        file_df.sort_index(inplace=True)
+
         grouped = file_df.groupby("path")
         metrics = []
 
         for path, group in grouped:
-            group = group.set_index("date").sort_index()  # Use date as index for rolling calculations
+            group = group.copy()
+
             group["size"] = pd.to_numeric(group["size"], errors="coerce")
             group = group.dropna(subset=["size"])  # Drop rows where size is NaN
 
@@ -65,23 +69,23 @@ class FileFeatureEngineer:
             for feature_name, feature_values in cumulative_features.items():
                 group[feature_name] = feature_values
 
-            # Lag features
+
             for lag in range(1, window + 1):
                 group[f"lag_{lag}_size"] = group["size"].shift(lag)
 
-                # Derived features
             derived_features = {
                 "absolute_change": group["size"].diff().abs(),
                 "percentage_change": group["size"].pct_change() * 100,
-                "rolling_mean_to_std_ratio": group[f"rolling_{window}_mean"] / group[f"rolling_{window}_std"],
+                f"rolling_{window}_mean_to_std_ratio": group[f"rolling_{window}_mean"] / group[f"rolling_{window}_std"],
                 }
 
             for feature_name, feature_values in derived_features.items():
                 group[feature_name] = feature_values
 
-            group["rolling_mean_to_std_ratio"] = group["rolling_mean_to_std_ratio"].replace([np.inf, -np.inf], 0)
+            group["percentage_change"] = group["size"].pct_change().replace([np.inf, -np.inf], np.nan)
+            group.replace([np.inf, -np.inf], 0, inplace=True)
 
-            metrics.append(group.reset_index())
+            metrics.append(group)
 
         return pd.concat(metrics)
 

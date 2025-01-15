@@ -69,55 +69,57 @@ class ClusterAnalyser:
 
         updated_files = set()
         logging.info("Updating clusters in the database for %d rows...", len(self.combined_df))
-        for idx, row in self.combined_df.iterrows():
-            file1, file2, cluster_id = row['file1'], row['file2'], row['cluster']
-            for file in [file1, file2]:
-                if file not in updated_files:
-                    try:
-                        await AsyncDatabase.update_one(
-                            self.api_connection.file_tracking_collection,
-                            {'path': file},
-                            {'$set': {'cluster': cluster_id}}
-                        )
-                        updated_files.add(file)
-                        logging.debug("Updated cluster ID %d for file %s", cluster_id, file)
-                    except Exception as e:
-                        logging.error(f"Failed to save cluster for {file}: {e}")
 
-            if idx % 100 == 0:
-                logging.info("Processed %d/%d rows for cluster updates.", idx, len(self.combined_df))
+        unique_files = pd.concat([self.combined_df['file1'], self.combined_df['file2']]).unique()
+        for file in unique_files:
+            rows_with_file = self.combined_df[
+                (self.combined_df['file1'] == file) | (self.combined_df['file2'] == file)
+                ]
+            cluster_id = int(rows_with_file['cluster'].mode()[0])
+            try:
+                await AsyncDatabase.update_one(
+                    self.api_connection.file_tracking_collection,
+                    {'path': file},
+                    {'$set': {'cluster': cluster_id}}
+                )
+                logging.debug("Updated cluster ID %d for file %s", cluster_id, file)
+            except Exception as e:
+                logging.error(f"Failed to save cluster for {file}: {e}")
 
         logging.info("All cluster IDs updated in the database.")
 
-        self.analyse_clusters()
+        summary_df = self.analyse_clusters()
 
         logging.info("Plotting clusters...")
         self.plotter.plot_clusters(self.combined_df)
 
         logging.info("Clustering analysis completed.")
-        return self.combined_df
+        return self.combined_df, summary_df
 
     def analyse_clusters(self):
         """
         Analyses each cluster and saves visualisations and summaries for each cluster.
         """
-        cluster_summary = {}
+        cluster_summaries = []
         if 'cooccurrence_scaled' not in self.combined_df.columns or 'distance_scaled' not in self.combined_df.columns:
             self.logger.error("Scaled columns are missing. Ensure data is scaled before analysis.")
             return
 
         for cluster in self.combined_df['cluster'].unique():
             cluster_data = self.combined_df[self.combined_df['cluster'] == cluster]
+
             avg_cooccurrence = cluster_data['cooccurrence'].mean()
             avg_distance = cluster_data['distance'].mean()
-            file_pairs = cluster_data[['file1', 'file2']].values
 
-            cluster_summary[cluster] = {
+            unique_files = pd.concat([cluster_data['file1'], cluster_data['file2']]).unique()
+            file_count = len(unique_files)
+
+            cluster_summaries.append({
+                'cluster': cluster,
                 'avg_cooccurrence': avg_cooccurrence,
                 'avg_distance': avg_distance,
-                'file_count': len(file_pairs),
-                'file_pairs': file_pairs.tolist()
-            }
+                'file_count': file_count
+            })
 
             plt.figure(figsize=(10, 8))
             plt.scatter(
@@ -131,9 +133,10 @@ class ClusterAnalyser:
             plt.title(f'Cluster {cluster} Analysis')
             plt.legend()
             self.plotter.save_plot(f'cluster_{cluster}_analysis.png')
+            plt.close()
 
-        summary_df = pd.DataFrame.from_dict(cluster_summary, orient='index')
-        summary_df.to_csv('cluster_summary.csv')
+        summary_df = pd.DataFrame(cluster_summaries)
+        #summary_df.to_csv('cluster_summary}.csv', index=False)
 
         return summary_df
 

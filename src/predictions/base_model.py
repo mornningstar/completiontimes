@@ -1,7 +1,6 @@
 import logging
 
 import joblib
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import StandardScaler
 
 
@@ -24,9 +23,16 @@ class BaseModel:
         raise NotImplementedError("Evaluate method must be implemented.")
 
     def save_model(self, filepath):
-        joblib.dump(self.model, filepath)
-        self.logger.info(f"Model saved to {filepath}")
+        try:
+            joblib.dump(self.model, filepath)
+            self.logger.info(f"Model saved to {filepath}")
+        except Exception as e:
+            self.logger.error(f"Failed to save model: {e}")
 
     def load_model(self, filepath):
-        self.model = joblib.load(filepath)
-        self.logger.info(f"Model loaded from {filepath}")
+        try:
+            self.model = joblib.load(filepath)
+            self.logger.info(f"Model loaded from {filepath}")
+        except Exception as e:
+            self.logger.error(f"Failed to load model: {e}")
+            raise

@@ -15,7 +15,7 @@ class Plotter:
 
         self._create_directory(self.images_dir)
 
-        self.project_images_dir = f"{self.images_dir}/{self.project_name}"
+        self.project_images_dir = f"{self.project_name}/{self.images_dir}"
         self._create_directory(self.project_images_dir)
 
     @staticmethod
@@ -82,26 +82,6 @@ class Plotter:
         logging.info(f"Co-occurrence matrix plot saved as {plot_name}.")
 
     def plot_zipf_distribution(self, cooccurrence_df):
-        """file_pairs = [(min(i), max(j)) for i in cooccurrence_df.index for j in cooccurrence_df.columns]
-        cooccurrence_values = cooccurrence_df.values.flatten()
-
-        unique_pairs = list(set(file_pairs))
-
-        cooccurrence_data = pd.DataFrame({'FilePair': unique_pairs, 'Cooccurrence': cooccurrence_values})
-
-        cooccurrence_data['FilePair'] = cooccurrence_data['FilePair'].apply(lambda x: f"{x[0]}, {x[1]}")
-
-        cooccurrence_data = cooccurrence_data[cooccurrence_data['Cooccurrence'] > 0].sort_values(
-            by='Cooccurrence', ascending=False)
-
-        plt.figure(figsize=(12, 6))
-        sns.barplot(data=cooccurrence_data.head(20), x='Cooccurrence', y='FilePair', hue='FilePair', dodge=False)
-        plt.title('Zipf\'s Law for File Co-occurrence')
-        plt.xlabel('Co-occurrence Count')
-        plt.ylabel('File Pairs')
-        plt.tight_layout()
-
-        self.save_plot("zipf_distribution.png")"""
         cooccurrence_dict = {}
 
         for i in cooccurrence_df.index:
@@ -155,7 +135,7 @@ class Plotter:
 
     def plot_proximity_histogram(self, proximity_df):
         plt.figure(figsize=(10, 6))
-        sns.histplot(proximity_df['distance'], bins=30, kde=False)
+        sns.histplot(proximity_df['distance'], binwidth=1, kde=False)#, bins=30)
         plt.title('Distribution of File Directory Distances')
         plt.xlabel('Directory Distance')
         plt.ylabel('Frequency')
@@ -196,7 +176,7 @@ class Plotter:
 
     def plot_distance_vs_cooccurrence_matrix(self, matrix):
         plt.figure(figsize=(6, 6))
-        sns.heatmap(matrix, annot=True, fmt="d", cmap="coolwarm", cbar=False, linewidths=.5)
+        sns.heatmap(matrix, annot=True, fmt=".2f", cmap="coolwarm", cbar=False, linewidths=.5)
         plt.xlabel("Directory Distance Level")
         plt.ylabel("Co-occurrence Level")
         plt.title("Co-occurrence vs. Directory Distance Matrix")
@@ -299,49 +279,6 @@ class Plotter:
         plt.legend()
 
         self.save_plot(f'commit_predictions_{task}.png')
-    '''
-    def plot_predictions(self, filedata_df, model_info, label, target):
-        plt.figure(figsize=(12, 6))
-
-        plt.step(filedata_df.index, filedata_df[target], label=f'Historical {target.capitalize()}', color='blue',
-                 linestyle='solid')
-
-        colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
-        color_cycle = cycle(colors)
-
-        for model_name, info in model_info.items():
-            if model_name == "ProphetModel":
-                x_train_dates = pd.to_datetime(info['x_train'], errors='coerce').tz_localize(None)
-                x_test_dates = pd.to_datetime(info['x_test'], errors='coerce').tz_localize(None)
-                predictions = info['predictions']
-            else:
-                x_train_dates = pd.to_datetime(info['x_train'].flatten())
-                x_test_dates = pd.to_datetime(info['x_test'].flatten())
-                predictions = info['predictions'].values if isinstance(info['predictions'], pd.Series) else info[
-                    'predictions']
-
-            last_train_point = info['y_train'].iloc[-1]
-            last_train_date = x_train_dates[-1]
-            predicted_df = pd.DataFrame({target: predictions}, index=x_test_dates)
-            current_colour = next(color_cycle)
-
-            plt.plot(predicted_df.index, predicted_df[target],
-                     label=f'Prediction by {model_name} (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, '
-                           f'RMSE: {info["rmse"]:.2f})', linestyle='-', color=current_colour)
-
-            if not predicted_df.empty:
-                first_pred_target = predicted_df.iloc[0][target]
-                plt.plot([last_train_date, x_test_dates[0]], [last_train_point, first_pred_target],
-                         color=current_colour, linestyle='-')
-
-        plt.xlabel('Date')
-        plt.ylabel(f'File {target.capitalize()}')
-        plt.title(f'{target.capitalize()} Over Time for {label}')
-        plt.grid(True)
-        plt.legend()
-
-        sanitized_label = label.replace("/", "_").replace(" ", "_")
-        self.save_plot(f'predict_{target}_{sanitized_label}.png')'''
 
     def plot_predictions(self, filedata_df, model_info, label, target):
         plt.figure(figsize=(12, 6))
@@ -394,7 +331,7 @@ class Plotter:
         """
         Creates scatter plot of all data points, coloured by clusters
         :param combined_df:
-        :return:
+        :return:x
         """
         plt.figure(figsize=(10, 8))
         plt.scatter(
