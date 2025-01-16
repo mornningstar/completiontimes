@@ -25,7 +25,7 @@ logging.basicConfig(
 )
 
 async def process_file_visualiser(api_connection, project_name, file_path, commit_visualiser, models, target,
-                                        all_file_features, cluster_combined_df=None):
+                                        all_file_features, project, cluster_combined_df=None):
     if file_path:
         logging.info(f"Processing file: {file_path}, target: {target} in project: {project_name}")
     else:
@@ -44,6 +44,18 @@ async def process_file_visualiser(api_connection, project_name, file_path, commi
 
     try:
         await file_visualiser.run()
+
+        # Predict file completion
+        horizon = project['horizon']  # Prediction horizon in days
+        threshold = project['theshold']  # Completion criterion: 10% change
+        consecutive_days = project['consecutive_days']  # Criterion must be met for 7 consecutive days
+        completion_date = await file_visualiser.predict_completion(target, horizon, threshold, consecutive_days)
+
+        if completion_date:
+            logging.info(f"Predicted completion date for {file_path}: {completion_date}")
+        else:
+            logging.info(f"No completion detected for {file_path} within {horizon} days.")
+
     except Exception as e:
         logging.error(f"Error processing file/cluster for target {target}. The error: {e}", exc_info=True)
 
@@ -99,14 +111,15 @@ async def process_project(project):
 
             tasks.extend([
                 process_file_visualiser(
-                    api_connection, project_name, file_path, commit_visualiser, models, target, all_file_features
+                    api_connection, project_name, file_path, commit_visualiser, models, target,
+                    all_file_features, project
                 ) for file_path in files
             ])
 
             if cluster_enabled and cluster_combined_df is not None:
                 tasks.extend([process_file_visualiser(
                     api_connection, project_name, None, commit_visualiser, models, target,
-                    all_file_features, cluster_combined_df=cluster_combined_df
+                    all_file_features, project, cluster_combined_df=cluster_combined_df
                 )]
                 )
 

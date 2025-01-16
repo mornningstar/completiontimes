@@ -22,18 +22,22 @@ PROJECTS = [
             'zipf_distribution': True
         },
 
-        #'file_modeling_tasks': {
-         #   'size': {
-          #      'files': ['src/interface/emacs/khoj.el', 'src/khoj/database/adapters/__init__.py'],
-           #     'cluster': False
-            #},
-            #'cumulative_size': {
-             #   'size': {
-              #  'files': ['src/interface/emacs/khoj.el', 'src/khoj/database/adapters/__init__.py'],
-               # 'cluster': False
-                #}
-            #}
-        #},
+        'file_modeling_tasks': {
+            'size': {
+                'files': ['src/interface/emacs/khoj.el', 'src/khoj/database/adapters/__init__.py'],
+                'cluster': False,
+                'horizon': 30, # Prediction horizon in days
+                'threshold': 10, # Completion criterion threshold: 10% change
+                'consecutive_days': 7 # Criterion must be met for 7 consecutive days
+            },
+            'cumulative_size': {
+                'files': ['src/interface/emacs/khoj.el', 'src/khoj/database/adapters/__init__.py'],
+                'cluster': False,
+                'horizon': 30,
+                'threshold': 10,
+                'consecutive_days': 7
+            }
+        },
     },
     {
         'name': 'openedx/edx-platform',

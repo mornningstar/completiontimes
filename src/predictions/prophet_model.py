@@ -40,7 +40,13 @@ class ProphetModel(BaseModel):
             model = Prophet(**params)
             model.fit(df)
 
-            df_cv = cross_validation(model, initial='365 days', horizon='30 days')
+            train_proportion = 0.7  # 70% for initial window
+            data_span = (df['ds'].max() - df['ds'].min()).days
+            initial_window = f"{int(data_span * train_proportion)} days"
+            calculated_horizon = int(data_span * 0.1)
+            horizon_days = max(7, min(calculated_horizon, 30))
+
+            df_cv = cross_validation(model, initial=initial_window, horizon=f"{horizon_days} days")
             return performance_metrics(df_cv)["mse"].mean()
 
         # Create an Optuna study and optimize
@@ -52,26 +58,34 @@ class ProphetModel(BaseModel):
 
         return self.best_params
 
-    def train(self, x_train, y_train):
-        # Prophet requires a DataFrame with specific column names
+    def train(self, x_train, y_train, refit=False):
         df_train = pd.DataFrame({"ds": x_train, "y": y_train}).dropna()
 
-        if not self.best_params:
+        if not self.best_params and not refit:
             self.best_params = self.tune_hyperparameters(df_train)
+
+        self.logger.info("Training Prophet model...")
 
         self.model = Prophet(**self.best_params)
         self.model.fit(df_train)
 
+        self.logger.info("Model training/refitting completed.")
+
     def predict(self, x_test):
         # Prophet expects a DataFrame with 'ds' column for dates
         df_future = pd.DataFrame({"ds": x_test})
-        return self.model.predict(df_future)["yhat"].values
+        predictions = self.model.predict(df_future)["yhat"].values
+
+        self.logger.info(f"Generated predictions for {len(x_test)} data points.")
+
+        return predictions
 
     def evaluate(self, x_test, y_test):
         predictions = self.predict(x_test)
-
         mse = mean_squared_error(y_true=y_test, y_pred=predictions)
         mae = mean_absolute_error(y_true=y_test, y_pred=predictions)
         rmse = np.sqrt(mse)
+
+        self.logger.info(f"Evaluation completed - MSE: {mse}, MAE: {mae}, RMSE: {rmse}")
 
         return predictions, mse, mae, rmse

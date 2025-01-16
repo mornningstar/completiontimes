@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from src.data_handling.async_database import AsyncDatabase
 from src.predictions.machine_learning.lstmmodel import LSTMModel
 from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 
@@ -78,19 +77,6 @@ class FileDataHandler:
     async def run(self, cluster=False, cluster_time_series=None):
         print("Run in DataHandler")
         self.process_data(cluster=cluster, cluster_time_series=cluster_time_series)
-
-
-    async def fetch_data(self):
-        """
-                Fetch the file data including precomputed features from the database.
-        """
-        query = {"path": self.file_path}
-        projection = {"commit_history": 1, "features": 1, "_id": 0}  # Fetch only relevant fields
-        self.file_data = await AsyncDatabase.find(self.api_connection.file_tracking_collection, query, projection)
-        if not self.file_data:
-            self.logging.error(f"No data found for file: {self.file_path}")
-            raise ValueError(f"No data found for file: {self.file_path}")
-        self.logging.info(f"Fetched data for {self.file_path}: {self.file_data}")
 
     def process_data(self, cluster=False, cluster_time_series=None):
         print("Processing data in DataHandler")
@@ -170,7 +156,7 @@ class FileDataHandler:
         arima_df.sort_index(inplace=True)
         arima_df.dropna(subset=[target], inplace=True)
 
-        dates = arima_df.index  # Use datetime index as `x`
+        dates = arima_df.index
         target_values = arima_df[target].values
 
         print(f"Dates values: {dates[:5]}")
@@ -180,10 +166,10 @@ class FileDataHandler:
         if train_size == 0:
             raise ValueError("Not enough data to split into train and test sets.")
 
-        x_train = dates[:train_size]  # Datetime indices
-        y_train = target_values[:train_size]  # Numerical target values
-        x_test = dates[train_size:]  # Datetime indices
-        y_test = target_values[train_size:]  # Numerical target values
+        x_train = dates[:train_size]
+        y_train = target_values[:train_size]
+        x_test = dates[train_size:]
+        y_test = target_values[train_size:]
 
         return x_train, y_train, x_test, y_test
 

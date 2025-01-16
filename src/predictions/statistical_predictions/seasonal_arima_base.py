@@ -77,13 +77,16 @@ class SeasonalARIMABase(BaseModel):
         # Detect seasonality
         seasonal_period = self.detect_seasonality(y_train)
 
+
         if seasonal_period:
+            self.logger.info("Seasonality detected. Using seasonal ARIMA.")
             self.model = pmd.auto_arima(
                 y_train, start_p=0, start_q=0, max_p=3, max_q=3,
                 d=d, seasonal=True, m=seasonal_period,
                 stepwise=True, trace=True
             )
         else:
+            self.logger.info("No seasonality detected. Defaulting to non-seasonal ARIMA.")
             self.model = pmd.auto_arima(
                 y_train, start_p=0, max_p=5, start_q=0, max_q=4,
                 d=d, seasonal=False, stepwise=True
@@ -96,7 +99,7 @@ class SeasonalARIMABase(BaseModel):
         if self.seasonal_order:
             self.logger.info(f"Selected SARIMA seasonal order: {self.seasonal_order}")
 
-    def train(self, x_train=None, y_train=None):
+    def train(self, x_train, y_train):
         """
         Train the model using either ARIMA or SARIMA.
         """

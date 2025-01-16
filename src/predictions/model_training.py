@@ -1,6 +1,8 @@
 import logging
 import traceback
 
+import pandas as pd
+
 from src.predictions.machine_learning.lstmmodel import LSTMModel
 
 
@@ -12,7 +14,7 @@ class ModelTrainer:
 
         self.logger = logging.getLogger(__name__)
 
-    def train_and_evaluate_model(self, x_train, y_train, x_test, y_test, use_clusters=False):
+    def train_and_evaluate_model(self, x_train, y_train, x_test, y_test, use_clusters=False, refit_full=False):
 
         print("X_train\n",x_train[:10])
         print("y_train\n",y_train[:10])
@@ -25,6 +27,7 @@ class ModelTrainer:
             model_name = model_class.__class__.__name__
 
             try:
+
                 self.logger.info(f"Starting training for {model_name}")
                 model = model_class
 
@@ -55,6 +58,7 @@ class ModelTrainer:
                     self.logger.info(f"Saved {model_name} model to disk.")
 
                 model_info[model.__class__.__name__] = {
+                    'model': model,
                     'mse': mse,
                     'mae': mae,
                     'rmse': rmse,
@@ -70,3 +74,22 @@ class ModelTrainer:
                 self.logger.error(traceback.format_exc())
 
         return model_info
+
+    def refit_model(self, model, x, y, steps=30):
+        self.logger.info(f"Refitting {model.__class__.__name__} on full data...")
+
+        last_date = x.index[-1]
+
+        # LSTM-specific reshaping
+        if isinstance(model, LSTMModel):
+            x = x.values.reshape(-1, x.shape[1], x.shape[2])
+            y = y.values
+
+        model.train(x_train=x, y_train=y, refit=True)
+
+        future_dates = pd.date_range(start=last_date, periods=steps + 1, freq="D")[1:]
+
+        predictions = model.predict(future_dates)
+        self.logger.info(f"{model.__class__.__name__} refitting and prediction completed.")
+
+        return future_dates, predictions

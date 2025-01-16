@@ -1,6 +1,7 @@
 import logging
 
 import matplotlib
+import pandas as pd
 
 from src.data_handling.file_data_handling import FileDataHandler
 from src.predictions.model_training import ModelTrainer
@@ -28,6 +29,8 @@ class FileVisualiser:
         self.cluster_combined_df = cluster_combined_df
         self.cluster = self.cluster_combined_df is not None
 
+        self.model_info = None
+
     def prepare_data(self, target, series=None, cluster=False):
         print("Preparing data in Visualiser")
         if series is None:
@@ -49,7 +52,7 @@ class FileVisualiser:
                 self.logging.info(f"Processing target: {target}")
 
                 x_train, x_test, y_train, y_test = self.prepare_data(target)
-                model_info = self.model_trainer.train_and_evaluate_model(x_train, y_train, x_test, y_test)
+                self.model_info = self.model_trainer.train_and_evaluate_model(x_train, y_train, x_test, y_test)
 
                 self.plotter.plot_predictions(self.data_handler.filedata_df, model_info, self.file_path, target)
 
@@ -70,3 +73,43 @@ class FileVisualiser:
                     x_train, x_test, y_train, y_test = self.prepare_data(target, series, cluster=True)
                     model_info = self.model_trainer.train_and_evaluate_model(x_train, y_train, x_test, y_test)
                     self.plotter.plot_predictions(series, model_info, f"Cluster {cluster_id} {target}", target)
+
+    async def predict_completion(self, target, steps, threshold=10, consecutive_days=7):
+        """
+        Predict file completion using a trained model.
+
+        :param target: The target feature for completion prediction (e.g., 'cumulative_size').
+        :param steps: Number of future steps to predict.
+        :param threshold: Percentage change threshold for completion.
+        :param consecutive_days: Number of consecutive days the threshold must be met.
+        :return: Predicted completion date or None if not met within the horizon.
+        """
+        # Ensure the target exists
+        if target not in self.data_handler.filedata_df.columns:
+            raise ValueError(f"Target {target} not found in filedata_df.")
+
+        # Get full data
+        full_data = self.data_handler.filedata_df[target]
+
+        model = self.model_info["model"]
+
+        full_x_train = full_data.index
+        full_y_train = full_data.values
+
+        future_dates, predictions = self.model_trainer.refit_model(model, full_x_train, full_y_train, steps=steps)
+
+        percentage_changes = [
+            (predictions[i] - predictions[i - 1]) / predictions[i - 1] * 100
+            for i in range(1, len(predictions))
+        ]
+
+        for i in range(len(percentage_changes) - consecutive_days + 1):
+            window = percentage_changes[i:i + consecutive_days]
+            if all(abs(change) < threshold for change in window):
+                completion_days = i + consecutive_days
+                completion_date = full_data.index[-1] + pd.Timedelta(days=completion_days)
+                self.logging.info(f"Predicted completion date for {target}: {completion_date}")
+                return completion_date
+
+        self.logging.info(f"No completion detected for {target} within {steps} days.")
+        return None
