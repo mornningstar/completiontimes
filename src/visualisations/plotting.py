@@ -296,8 +296,8 @@ class Plotter:
                 x_test_dates = pd.to_datetime(info['x_test'], errors='coerce').tz_localize(None)
                 predictions = info['predictions']
             else:  # General handling (e.g., LSTM or others)
-                x_train_dates = pd.to_datetime(info['x_train'].flatten(), errors='coerce').tz_localize(None)
-                x_test_dates = pd.to_datetime(info['x_test'].flatten(), errors='coerce').tz_localize(None)
+                x_train_dates = pd.to_datetime(info['x_train'], errors='coerce').tz_localize(None)
+                x_test_dates = pd.to_datetime(info['x_test'], errors='coerce').tz_localize(None)
                 predictions = (info['predictions'].values
                                if isinstance(info['predictions'], pd.Series)
                                else info['predictions'])

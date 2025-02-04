@@ -32,7 +32,7 @@ def handle_gaps(data, target_types):
     Handles gaps in time series data based on the target type.
 
     :param data: pd.DataFrame or pd.Series - The time series data with a datetime index.
-    :param target_type: str - The type of the target feature (e.g., 'cumulative', 'rolling').
+    :param target_types: str - The type of the target feature (e.g., 'cumulative', 'rolling').
     :return: pd.DataFrame or pd.Series - The gap-handled data.
     """
     if not isinstance(target_types, list):
@@ -134,33 +134,30 @@ class FileDataHandler:
             raise ValueError(f"Target column '{target}' not found in the data.")
 
     def prepare_model_specific_data(self, models, target, data, timesteps=10, test_size=0.2):
-        print("Preparing model specific data in Visualiser")
-        if any(isinstance(model, LSTMModel) for model in models):
+        self.logging.info(f"Preparing data for target: {target}")
+        if any(model == LSTMModel for model in models):
             return self.prepare_lstm_data(target, timesteps, test_size)
-        elif any(isinstance(model, SeasonalARIMABase) for model in models):
+        elif any(model == SeasonalARIMABase for model in models):
             return self.prepare_arima_data(target, test_size)
         else:
             return self.prepare_data(target, test_size)
 
     def prepare_arima_data(self, target, test_size=0.2):
-        print("Prepare ARIMA data in DataHandler")
+        self.logging.debug("Prepare ARIMA data in DataHandler")
         self.validate_target(target)
-
-        print("Target in ARIMA:")
-        print(target[:5])
 
         arima_df = self.filedata_df.copy()
 
-        print(self.filedata_df.head(5))
+        arima_df[target] = pd.to_numeric(arima_df[target], errors='coerce')
+        arima_df.dropna(subset=[target], inplace=True)
 
         arima_df.sort_index(inplace=True)
-        arima_df.dropna(subset=[target], inplace=True)
 
         dates = arima_df.index
         target_values = arima_df[target].values
 
-        print(f"Dates values: {dates[:5]}")
-        print(f"Target values: {target_values[:5]}")
+        self.logging.debug(f"Dates values: {dates[:5]}")
+        self.logging.debug(f"Target values: {target_values[:5]} (dtype: {target_values.dtype})")
 
         train_size = int((1 - test_size) * len(target_values))
         if train_size == 0:
@@ -170,6 +167,11 @@ class FileDataHandler:
         y_train = target_values[:train_size]
         x_test = dates[train_size:]
         y_test = target_values[train_size:]
+
+        print("x_train: ", x_train)
+        print("y_train: ", y_train)
+        print("x_test: ", x_test)
+        print("y_test: ", y_test)
 
         return x_train, y_train, x_test, y_test
 

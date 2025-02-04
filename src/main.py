@@ -45,10 +45,14 @@ async def process_file_visualiser(api_connection, project_name, file_path, commi
     try:
         await file_visualiser.run()
 
+        horizon = project['file_modeling_tasks'][target]['horizon']
+        threshold = project['file_modeling_tasks'][target]['threshold']
+        consecutive_days = project['file_modeling_tasks'][target]['consecutive_days']
+
         # Predict file completion
-        horizon = project['horizon']  # Prediction horizon in days
-        threshold = project['theshold']  # Completion criterion: 10% change
-        consecutive_days = project['consecutive_days']  # Criterion must be met for 7 consecutive days
+        #horizon = project['horizon']  # Prediction horizon in days
+        #threshold = project['theshold']  # Completion criterion: 10% change
+        #consecutive_days = project['consecutive_days']  # Criterion must be met for 7 consecutive days
         completion_date = await file_visualiser.predict_completion(target, horizon, threshold, consecutive_days)
 
         if completion_date:

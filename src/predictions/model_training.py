@@ -16,11 +16,6 @@ class ModelTrainer:
 
     def train_and_evaluate_model(self, x_train, y_train, x_test, y_test, use_clusters=False, refit_full=False):
 
-        print("X_train\n",x_train[:10])
-        print("y_train\n",y_train[:10])
-        print("X_test\n",x_test[:10])
-        print("y_test\n",y_test[:10])
-
         model_info = {}
 
         for model_class in self.model_classes:
@@ -29,7 +24,7 @@ class ModelTrainer:
             try:
 
                 self.logger.info(f"Starting training for {model_name}")
-                model = model_class
+                model = model_class()
 
                 # Hyperparameter Tuning
                 if hasattr(model, 'auto_tune'):
@@ -69,6 +64,8 @@ class ModelTrainer:
                     'y_test': y_test
                 }
 
+                self.logger.info(f"Training for {model_name} completed with MSE: {mse}.")
+
             except Exception as e:
                 self.logger.error(f"Error during training for {model_name}: {str(e)}")
                 self.logger.error(traceback.format_exc())
@@ -78,7 +75,7 @@ class ModelTrainer:
     def refit_model(self, model, x, y, steps=30):
         self.logger.info(f"Refitting {model.__class__.__name__} on full data...")
 
-        last_date = x.index[-1]
+        last_date = x[-1] if isinstance(x, pd.DatetimeIndex) else x.index[-1]
 
         # LSTM-specific reshaping
         if isinstance(model, LSTMModel):

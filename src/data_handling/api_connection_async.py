@@ -20,7 +20,7 @@ class APIConnectionAsync:
         self.session = None
 
         #self.config = self.load_config()
-        config = CONFIG[0]['github_access_token'] #self.load_config()
+        config = CONFIG[0]['github_access_token']
         self.access_token = config
         #self.access_token = self.config.get('github_access_token', '')
 

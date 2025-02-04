@@ -26,30 +26,30 @@ class SeasonalARIMABase(BaseModel):
         """
         result = adfuller(y_train)
         p_value = result[1]
+        self.logger.info(f"ADF Test p-value: {p_value}")
 
         return p_value <= 0.05  # If p-value <= 0.05, data is stationary
 
     def detect_seasonality(self, data, max_lag=365, min_seasonality=7):
+        data = np.asarray(data, dtype=np.float64)
 
         acf_values = acf(data, nlags=max_lag, fft=True)
-        acf_values[0] = 0  # Ignore lag-0
+        acf_values[0] = 0
+        acf_values[:min_seasonality + 1] = 0
         seasonal_lag_acf = np.argmax(acf_values[:max_lag])
-
-        # Ignore lags below the minimum seasonality threshold
-        acf_values[:min_seasonality] = 0
 
         frequencies, spectrum = periodogram(data)
         seasonal_lag_fft = int(1 / frequencies[np.argmax(spectrum)]) if len(frequencies) > 1 else None
 
         # Combine results
         if acf_values[seasonal_lag_acf] > 0.5:
-            print(f"ACF detected seasonality: {seasonal_lag_acf} days")
+            self.logger.info(f"ACF detected seasonality: {seasonal_lag_acf} days")
             return seasonal_lag_acf
         elif seasonal_lag_fft and seasonal_lag_fft <= max_lag:
-            print(f"FFT detected seasonality: {seasonal_lag_fft} days")
+            self.logger.info(f"FFT detected seasonality: {seasonal_lag_fft} days")
             return seasonal_lag_fft
         else:
-            print("No significant seasonality detected")
+            self.logger.info("No significant seasonality detected")
             return None
 
     def scale_data(self, data):
@@ -76,17 +76,37 @@ class SeasonalARIMABase(BaseModel):
 
         # Detect seasonality
         seasonal_period = self.detect_seasonality(y_train)
+        sufficient_samples = (len(y_train) > (seasonal_period + 10)) if seasonal_period else False
 
+        if seasonal_period and sufficient_samples:
+            self.logger.info("Seasonality detected. Trying seasonal ARIMA.")
 
-        if seasonal_period:
-            self.logger.info("Seasonality detected. Using seasonal ARIMA.")
-            self.model = pmd.auto_arima(
-                y_train, start_p=0, start_q=0, max_p=3, max_q=3,
-                d=d, seasonal=True, m=seasonal_period,
-                stepwise=True, trace=True
-            )
+            try:
+                self.model = pmd.auto_arima(
+                    y_train, start_p=0, start_q=0, max_p=3, max_q=3,
+                    d=d, seasonal=True, m=seasonal_period,
+                    stepwise=True, trace=True
+                )
+            except ValueError as e:
+                if "There are no more samples" in str(e):
+                    self.logger.warning(
+                        "Seasonal differencing failed due to insufficient samples; "
+                        "falling back to non-seasonal ARIMA."
+                    )
+
+                    self.model = pmd.auto_arima(
+                        y_train, start_p=0, max_p=5, start_q=0, max_q=4, d=d,
+                        seasonal=False, stepwise=True
+                    )
+
+                else:
+                    raise e
         else:
-            self.logger.info("No seasonality detected. Defaulting to non-seasonal ARIMA.")
+            self.logger.info(
+                "Either no seasonality detected or insufficient data for seasonal differencing. "
+                "Using non-seasonal ARIMA."
+            )
+
             self.model = pmd.auto_arima(
                 y_train, start_p=0, max_p=5, start_q=0, max_q=4,
                 d=d, seasonal=False, stepwise=True
@@ -99,7 +119,7 @@ class SeasonalARIMABase(BaseModel):
         if self.seasonal_order:
             self.logger.info(f"Selected SARIMA seasonal order: {self.seasonal_order}")
 
-    def train(self, x_train, y_train):
+    def train(self, x_train, y_train, refit=False):
         """
         Train the model using either ARIMA or SARIMA.
         """
@@ -115,12 +135,17 @@ class SeasonalARIMABase(BaseModel):
             # Use ARIMA
             self.fitted_model = ARIMA(y_train_scaled, order=self.order).fit()
 
-    def predict(self, steps):
+    def predict(self, future):
         """
         Generate predictions based on the fitted model.
         """
         if self.fitted_model is None:
             raise ValueError("Model is not trained. Call 'train' before predicting.")
+
+        if not isinstance(future, int):
+            steps = len(future)
+        else:
+            steps = future
 
         scaled_predictions = self.fitted_model.forecast(steps=steps)
         return self.inverse_scale(scaled_predictions)

@@ -32,7 +32,7 @@ class FileVisualiser:
         self.model_info = None
 
     def prepare_data(self, target, series=None, cluster=False):
-        print("Preparing data in Visualiser")
+
         if series is None:
             if not hasattr(self.data_handler, "filedata_df") or self.data_handler.filedata_df.empty:
                 raise ValueError("No valid data available to prepare.")
@@ -41,20 +41,20 @@ class FileVisualiser:
         if cluster:
             series = self.data_handler.prepare_cluster_data(series, target)
 
+        self.logging.info(f"Series is:\n{series}")
+
         return self.data_handler.prepare_model_specific_data(self.models, target, series)
 
     async def run(self):
-        print("Run in visualiser")
+        self.logging.info("Starting file visualiser")
         if not self.cluster:
             await self.data_handler.run(cluster=False)
             for target in self.targets:
 
-                self.logging.info(f"Processing target: {target}")
-
-                x_train, x_test, y_train, y_test = self.prepare_data(target)
+                x_train, y_train, x_test, y_test = self.prepare_data(target)
                 self.model_info = self.model_trainer.train_and_evaluate_model(x_train, y_train, x_test, y_test)
 
-                self.plotter.plot_predictions(self.data_handler.filedata_df, model_info, self.file_path, target)
+                self.plotter.plot_predictions(self.data_handler.filedata_df, self.model_info, self.file_path, target)
 
         elif self.cluster and self.cluster_combined_df is not None:
 
@@ -91,7 +91,8 @@ class FileVisualiser:
         # Get full data
         full_data = self.data_handler.filedata_df[target]
 
-        model = self.model_info["model"]
+        #model = self.model_info["model"]
+        model = next(iter(self.model_info.values()))["model"]
 
         full_x_train = full_data.index
         full_y_train = full_data.values
