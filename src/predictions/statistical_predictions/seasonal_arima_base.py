@@ -30,23 +30,24 @@ class SeasonalARIMABase(BaseModel):
 
         return p_value <= 0.05  # If p-value <= 0.05, data is stationary
 
-    def detect_seasonality(self, data, max_lag=365, min_seasonality=7):
+    def detect_seasonality(self, data, max_lag=365, min_seasonality=2):
         data = np.asarray(data, dtype=np.float64)
 
         acf_values = acf(data, nlags=max_lag, fft=True)
-        acf_values[0] = 0
         acf_values[:min_seasonality + 1] = 0
-        seasonal_lag_acf = np.argmax(acf_values[:max_lag])
+        seasonal_lag_acf = np.argmax(acf_values) if np.max(acf_values) > 0.5 else None
 
         frequencies, spectrum = periodogram(data)
         seasonal_lag_fft = int(1 / frequencies[np.argmax(spectrum)]) if len(frequencies) > 1 else None
 
-        # Combine results
-        if acf_values[seasonal_lag_acf] > 0.5:
-            self.logger.info(f"ACF detected seasonality: {seasonal_lag_acf} days")
+        if seasonal_lag_acf and (seasonal_lag_fft and abs(seasonal_lag_acf - seasonal_lag_fft) <= 5):
+            self.logger.info(f"Seasonality detected (ACF & FFT agree): {seasonal_lag_acf} days")
+            return seasonal_lag_acf
+        elif seasonal_lag_acf:
+            self.logger.info(f"Seasonality detected (ACF only): {seasonal_lag_acf} days")
             return seasonal_lag_acf
         elif seasonal_lag_fft and seasonal_lag_fft <= max_lag:
-            self.logger.info(f"FFT detected seasonality: {seasonal_lag_fft} days")
+            self.logger.info(f"Seasonality detected (FFT only): {seasonal_lag_fft} days")
             return seasonal_lag_fft
         else:
             self.logger.info("No significant seasonality detected")
@@ -83,9 +84,16 @@ class SeasonalARIMABase(BaseModel):
 
             try:
                 self.model = pmd.auto_arima(
-                    y_train, start_p=0, start_q=0, max_p=3, max_q=3,
-                    d=d, seasonal=True, m=seasonal_period,
-                    stepwise=True, trace=True
+                    y_train,
+                    start_p=0,  max_p=7,
+                    start_q=0, max_q=7,
+                    d=d,
+                    seasonal=True, m=seasonal_period,
+                    start_P=0, max_P=3,
+                    start_Q=0, max_Q=3,
+                    stepwise=True,
+                    trace=True,
+                    n_fits=100
                 )
             except ValueError as e:
                 if "There are no more samples" in str(e):
@@ -95,8 +103,12 @@ class SeasonalARIMABase(BaseModel):
                     )
 
                     self.model = pmd.auto_arima(
-                        y_train, start_p=0, max_p=5, start_q=0, max_q=4, d=d,
-                        seasonal=False, stepwise=True
+                        y_train,
+                        start_p=0, max_p=5,
+                        start_q=0, max_q=5,
+                        d=d,
+                        seasonal=False, stepwise=True,
+                        n_fits=100
                     )
 
                 else:
@@ -108,8 +120,11 @@ class SeasonalARIMABase(BaseModel):
             )
 
             self.model = pmd.auto_arima(
-                y_train, start_p=0, max_p=5, start_q=0, max_q=4,
-                d=d, seasonal=False, stepwise=True
+                y_train, start_p=0, max_p=5,
+                start_q=0, max_q=4,
+                d=d,
+                seasonal=False, stepwise=True,
+                n_fits=100
             )
 
         self.order = self.model.order

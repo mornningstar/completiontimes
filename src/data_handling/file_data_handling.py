@@ -52,7 +52,7 @@ def handle_gaps(data, target_types):
             data = data.resample('D').interpolate(method='linear')
         elif method == 'zero_fill':
             logging.info(f'Zero-filling gaps for {target_type}')
-            data = data.resample('D').fillna(0)
+            data = data.resample('D').asfreq(fill_value=0)
         elif method is None:
             raise ValueError(f"No gap handling method defined for target type: {target_type}")
         else:

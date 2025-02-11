@@ -35,8 +35,18 @@ class ProphetModel(BaseModel):
         def objective(trial):
             params = {
                 "seasonality_mode": trial.suggest_categorical("seasonality_mode", ["additive", "multiplicative"]),
-                "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 0.5, log=True),
+                "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 1, log=True),
+                "seasonality_prior_scale": trial.suggest_float("seasonality_prior_scale", 0.01, 10, log=True),
+                "holidays_prior_scale": trial.suggest_float("holidays_prior_scale", 0.01, 10, log=True),
+                "yearly_seasonality": trial.suggest_categorical("yearly_seasonality", [True, False]),
+                "weekly_seasonality": trial.suggest_categorical("weekly_seasonality", [True, False]),
+                "daily_seasonality": trial.suggest_categorical("daily_seasonality", [True, False]),
+                "growth": trial.suggest_categorical("growth", ["linear", "logistic"]),
             }
+
+            if params["growth"] == "logistic":
+                df["cap"] = df["y"].max() * 1.1  # Slightly above max value to avoid over-restriction
+
             model = Prophet(**params)
             model.fit(df)
 
@@ -47,6 +57,7 @@ class ProphetModel(BaseModel):
             horizon_days = max(7, min(calculated_horizon, 30))
 
             df_cv = cross_validation(model, initial=initial_window, horizon=f"{horizon_days} days")
+
             return performance_metrics(df_cv)["mse"].mean()
 
         # Create an Optuna study and optimize

@@ -1,8 +1,6 @@
 from src.data_handling.repodata_handler import RepoDataHandler
 from src.predictions.machine_learning.lstmmodel import LSTMModel
 from src.predictions.model_training import ModelTrainer
-from src.predictions.statistical_predictions.arima import ARIMAModel
-from src.predictions.statistical_predictions.sarima import SARIMAModel
 from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 from src.visualisations.plotting import Plotter
 
@@ -51,7 +49,7 @@ class CommitVisualiser:
                     print("Started plotting LSTM predictions")
                     self.plotter.plot_lstm_predictions(self.data_handler.commits_df, model_info, task)
                     print("Ended plotting LSTM predictions")
-                elif model in [ARIMAModel, SARIMAModel]:
+                elif model == SeasonalARIMABase:
                     print("Started plotting ARIMA/SARIMA predictions")
                     self.plotter.plot_commit_predictions(self.data_handler.commits_df, model_info, task)
                     print("Ended plotting ARIMA/SARIMA predictions")

@@ -302,12 +302,21 @@ class Plotter:
                                if isinstance(info['predictions'], pd.Series)
                                else info['predictions'])
 
-                # Plot predictions
+            # Plot predictions
             current_color = next(color_cycle)
             predicted_df = pd.DataFrame({target: predictions}, index=x_test_dates)
             plt.plot(predicted_df.index, predicted_df[target],
                      label=f'{model_name} Predictions (MSE: {info["mse"]:.2f}, MAE: {info["mae"]:.2f}, RMSE: {info["rmse"]:.2f})',
                      color=current_color)
+
+            if model_name == "ProphetModel":
+                last_train_value = filedata_df[target].iloc[len(filedata_df) - len(info['y_test']) - 1]
+                first_prediction_value = predictions[0]
+                plt.plot(
+                    [x_train_dates[-1], x_test_dates[0]],
+                    [last_train_value, first_prediction_value],
+                    linestyle='--', color=current_color, label=f'{model_name} Transition'
+                )
 
             # Handle LSTM-specific connection (last train point to first prediction)
             if model_name == "LSTMModel":

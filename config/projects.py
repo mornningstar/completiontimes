@@ -1,9 +1,10 @@
+from src.predictions.prophet_model import ProphetModel
 from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 
 PROJECTS = [
     {
         'name': 'khoj-ai/khoj',
-        'models': [SeasonalARIMABase],
+        'models': [ProphetModel],
         "recluster": False,
         "replot": False,
         "plot_options": {
