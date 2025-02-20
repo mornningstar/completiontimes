@@ -25,10 +25,10 @@ PROJECTS = [
 
         'file_modeling_tasks': {
             'cumulative_size': {
-                'files': ['src/khoj/database/adapters/__init__.py'],
-                'cluster': False,
+                #'files': ['src/khoj/database/adapters/__init__.py'],
+                'cluster': True,
                 'horizon': 30,
-                'threshold': 10,
+                'threshold': 0.5,
                 'consecutive_days': 7
             }
         },

@@ -6,8 +6,6 @@ import pandas as pd
 from prophet import Prophet
 from prophet.diagnostics import cross_validation, performance_metrics
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.tsa.stattools import acf
 
 from src.predictions.base_model import BaseModel
 
@@ -20,52 +18,58 @@ class ProphetModel(BaseModel):
         self.seasonal = None
         self.best_params = None
 
-    def tune_hyperparameters(self, df, n_trials=50):
-        """
-        Uses Optuna to tune hyperparameters for Prophet model.
-
-        Parameters:
-            df (DataFrame): Data containing 'ds' and 'y' columns for Prophet.
-            n_trials (int): Number of trials for Optuna study.
-
-        Returns:
-            dict: Best hyperparameters found by Optuna.
-        """
+    def tune_hyperparameters(self, df, n_trials=100, patience=10):
+        best_trial = None
+        best_mse = float("inf")
+        no_improvement_count = 0
 
         def objective(trial):
+            nonlocal best_trial, best_mse, no_improvement_count
+
             params = {
                 "seasonality_mode": trial.suggest_categorical("seasonality_mode", ["additive", "multiplicative"]),
                 "changepoint_prior_scale": trial.suggest_float("changepoint_prior_scale", 0.001, 1, log=True),
-                "seasonality_prior_scale": trial.suggest_float("seasonality_prior_scale", 0.01, 10, log=True),
-                "holidays_prior_scale": trial.suggest_float("holidays_prior_scale", 0.01, 10, log=True),
-                "yearly_seasonality": trial.suggest_categorical("yearly_seasonality", [True, False]),
                 "weekly_seasonality": trial.suggest_categorical("weekly_seasonality", [True, False]),
-                "daily_seasonality": trial.suggest_categorical("daily_seasonality", [True, False]),
-                "growth": trial.suggest_categorical("growth", ["linear", "logistic"]),
+                "yearly_seasonality": trial.suggest_categorical("yearly_seasonality", [True, False]),
             }
 
-            if params["growth"] == "logistic":
-                df["cap"] = df["y"].max() * 1.1  # Slightly above max value to avoid over-restriction
-
             model = Prophet(**params)
+
             model.fit(df)
 
             train_proportion = 0.7  # 70% for initial window
             data_span = (df['ds'].max() - df['ds'].min()).days
             initial_window = f"{int(data_span * train_proportion)} days"
-            calculated_horizon = int(data_span * 0.1)
-            horizon_days = max(7, min(calculated_horizon, 30))
+
+            calculated_horizon = int(data_span * 0.2)
+            horizon_days = max(7, min(calculated_horizon, max(30, int(data_span * 0.1))))
 
             df_cv = cross_validation(model, initial=initial_window, horizon=f"{horizon_days} days")
 
-            return performance_metrics(df_cv)["mse"].mean()
+            mse = performance_metrics(df_cv)["mse"].mean()
+
+            # **Early stopping logic**
+            if mse < best_mse:
+                best_mse = mse
+                best_trial = trial
+                no_improvement_count = 0
+                logging.info(f"New best MSE: {best_mse} found at trial {trial.number}")
+            else:
+                no_improvement_count += 1
+                logging.info(f"No improvement (count: {no_improvement_count}), MSE: {mse}")
+
+            if no_improvement_count >= patience:
+                logging.info(f"Early stopping triggered at trial {trial.number}, best MSE: {best_mse}")
+                raise optuna.exceptions.TrialPruned()  # Stop further trials
+
+            return mse
 
         # Create an Optuna study and optimize
-        study = optuna.create_study(direction="minimize")
-        study.optimize(objective, n_trials=n_trials)
+        study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler())
+        study.optimize(objective, n_trials=n_trials, n_jobs=4)
 
         self.best_params = study.best_params
-        logging.info("Found best parameters for Prohet model with MSE: {}".format(study.best_value))
+        logging.info("Found best parameters for Prophet model with MSE: {}".format(study.best_value))
 
         return self.best_params
 
@@ -85,6 +89,7 @@ class ProphetModel(BaseModel):
     def predict(self, x_test):
         # Prophet expects a DataFrame with 'ds' column for dates
         df_future = pd.DataFrame({"ds": x_test})
+
         predictions = self.model.predict(df_future)["yhat"].values
 
         self.logger.info(f"Generated predictions for {len(x_test)} data points.")

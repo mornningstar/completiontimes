@@ -63,7 +63,7 @@ def handle_gaps(data, target_types):
 
 
 class FileDataHandler:
-    def __init__(self, api_connection, file_path, targets, all_file_features):
+    def __init__(self, api_connection, file_path, targets, all_file_features, cluster):
         self.logging = logging.getLogger(self.__class__.__name__)
         self.api_connection = api_connection
         self.file_path = file_path
@@ -74,14 +74,15 @@ class FileDataHandler:
         self.clusterdata_df = None
         self.all_file_features = all_file_features
 
-    async def run(self, cluster=False, cluster_time_series=None):
-        print("Run in DataHandler")
-        self.process_data(cluster=cluster, cluster_time_series=cluster_time_series)
+        self.cluster = cluster
 
-    def process_data(self, cluster=False, cluster_time_series=None):
+    async def run(self, cluster_time_series=None):
+        self.process_data(cluster_time_series=cluster_time_series)
+
+    def process_data(self, cluster_time_series=None):
         print("Processing data in DataHandler")
 
-        if not cluster:
+        if not self.cluster:
             features_df = self.all_file_features[self.all_file_features["path"] == self.file_path].copy()
             features_df.index = pd.to_datetime(features_df.index).tz_localize(None)
 
@@ -98,9 +99,13 @@ class FileDataHandler:
 
             self.filedata_df = features_df[relevant_features]
 
-        elif cluster:
+        elif self.cluster:
             if not cluster_time_series:
                 raise ValueError("Cluster mode requires 'cluster_time_series' input.")
+
+            print("Processing clusters. Cluster time series keys:", cluster_time_series.keys())
+            print("Cluster time series data:", cluster_time_series)
+            print(type(cluster_time_series))
 
             cluster_dfs = []
             for cluster_id, time_series in cluster_time_series.items():
@@ -130,23 +135,31 @@ class FileDataHandler:
             self.clusterdata_df = pd.concat(cluster_dfs)
 
     def validate_target(self, target):
-        if target not in self.filedata_df.columns:
-            raise ValueError(f"Target column '{target}' not found in the data.")
+        if not self.cluster:
+            if self.filedata_df is None or self.filedata_df.empty:
+                raise ValueError("File data is not available!")
+            if target not in self.filedata_df.columns:
+                raise ValueError(f"Target column '{target}' not found in filedata_df.")
+        else:
+            if self.clusterdata_df is None or self.clusterdata_df.empty:
+                raise ValueError("Cluster data is not available!")
+            if target not in self.clusterdata_df.columns:
+                raise ValueError(f"Target column '{target}' not found in clusterdata_df.")
 
     def prepare_model_specific_data(self, models, target, data, timesteps=10, test_size=0.2):
         self.logging.info(f"Preparing data for target: {target}")
         if any(model == LSTMModel for model in models):
-            return self.prepare_lstm_data(target, timesteps, test_size)
+            return self.prepare_lstm_data(target, data, timesteps, test_size)
         elif any(model == SeasonalARIMABase for model in models):
-            return self.prepare_arima_data(target, test_size)
+            return self.prepare_arima_data(target, data, test_size)
         else:
-            return self.prepare_data(target, test_size)
+            return self.prepare_data(target, data, test_size=test_size)
 
-    def prepare_arima_data(self, target, test_size=0.2):
+    def prepare_arima_data(self, target, data, test_size=0.2):
         self.logging.debug("Prepare ARIMA data in DataHandler")
         self.validate_target(target)
 
-        arima_df = self.filedata_df.copy()
+        arima_df = data.copy()
 
         arima_df[target] = pd.to_numeric(arima_df[target], errors='coerce')
         arima_df.dropna(subset=[target], inplace=True)
@@ -176,9 +189,10 @@ class FileDataHandler:
         return x_train, y_train, x_test, y_test
 
     # Tried for Prophet last
-    def prepare_data(self, target, test_size=0.2):
+    def prepare_data(self, target, data, test_size=0.2):
         """
         Prepares the data for visualisation.
+        :param data:
         :param target: target column - which column to predict
         :param test_size: Percentage of data to be used for testing
         :return:
@@ -189,11 +203,11 @@ class FileDataHandler:
         """
         self.validate_target(target)
 
-        self.filedata_df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        self.filedata_df.dropna(subset=[target], inplace=True)
-        self.filedata_df.sort_index(inplace=True)
+        data.replace([np.inf, -np.inf], np.nan, inplace=True)
+        data.dropna(subset=[target], inplace=True)
+        data.sort_index(inplace=True)
 
-        train, test = train_test_split(self.filedata_df, test_size=test_size, shuffle=False)
+        train, test = train_test_split(data, test_size=test_size, shuffle=False)
 
         x_train = train.index.tz_localize(None)
         y_train = train[target]
@@ -201,11 +215,12 @@ class FileDataHandler:
         x_test = test.index.tz_localize(None)
         y_test = test[target]
 
-        return x_train, y_train, x_test, y_test
+        return x_train, x_test, y_train, y_test
 
-    def prepare_lstm_data(self, target, timesteps=10, test_size=0.2):
+    def prepare_lstm_data(self, target, data, timesteps=10, test_size=0.2):
         """
         Prepares data for LSTM models (3D input for LSTM).
+        :param data:
         :param target: target column - which column to predict
         :param timesteps: Number of time steps to consider in the LSTM input
         :param test_size: Percentage of data to be used for testing
@@ -215,19 +230,19 @@ class FileDataHandler:
         """
         self.validate_target(target)
 
-        if len(self.filedata_df) < timesteps:
+        if len(data) < timesteps:
             raise ValueError(f"Not enough data points to create sequences with timesteps={timesteps}.")
 
-        self.filedata_df.sort_index(inplace=True)
-        self.filedata_df.ffill(inplace=True)
-        self.filedata_df.bfill(inplace=True)
+        data.sort_index(inplace=True)
+        data.ffill(inplace=True)
+        data.bfill(inplace=True)
 
-        feature_cols = [col for col in self.filedata_df.columns if col != target]
+        feature_cols = [col for col in data.columns if col != target]
 
         # Split into training and test sets
-        train_size = int((1 - test_size) * len(self.filedata_df))
-        df_train = self.filedata_df[:train_size]
-        df_test = self.filedata_df[train_size:]
+        train_size = int((1 - test_size) * len(data))
+        df_train = data[:train_size]
+        df_test = data[train_size:]
 
         # Prepare LSTM-specific 3D data [samples, timesteps, features]
         x_train = np.array([df_train[feature_cols].values[i:i + timesteps] for i in range(len(df_train) - timesteps)])
@@ -250,7 +265,6 @@ class FileDataHandler:
         :param cluster_data: Aggregated cluster-level time-series data.
         :return: Preprocessed cluster_data DataFrame.
         """
-        self.validate_target(target)
 
         cluster_data = cluster_data.copy()
         cluster_data.dropna(subset=[target], inplace=True)
@@ -258,16 +272,13 @@ class FileDataHandler:
 
         return cluster_data
 
-    def aggregate_cluster_features(self, combined_df, date_col="date"):
+    def aggregate_cluster_features(self, cluster_combined_df, date_col="date"):
         cluster_time_series = {}
 
-        if date_col not in self.filedata_df.columns:
-            raise ValueError(f"Date column '{date_col}' not found in filedata_df.")
+        for cluster_id, cluster_files in cluster_combined_df.groupby("cluster"):
+            file_paths = cluster_files["file1"].tolist() + cluster_files["file2"].tolist()
 
-        for cluster_id, cluster_files in combined_df.groupby("cluster"):
-            file_features = self.filedata_df[
-                self.filedata_df["path"].isin(cluster_files["file1"].tolist() + cluster_files["file2"].tolist())
-            ]
+            file_features = self.all_file_features[self.all_file_features["path"].isin(file_paths)]
 
             if file_features.empty:
                 self.logging.warning(f"No valid files found for cluster {cluster_id}")

@@ -2,11 +2,8 @@ import asyncio
 import logging
 import platform
 
-import pandas as pd
-
 from config.projects import PROJECTS
 from src.data_handling.api_connection_async import APIConnectionAsync
-from src.data_handling.async_database import AsyncDatabase
 from src.data_handling.file_cooccurence_analyser import FileCooccurenceAnalyser
 from src.data_handling.file_feature_engineering import FileFeatureEngineer
 from src.visualisations.commit_visualiser import CommitVisualiser
@@ -49,10 +46,6 @@ async def process_file_visualiser(api_connection, project_name, file_path, commi
         threshold = project['file_modeling_tasks'][target]['threshold']
         consecutive_days = project['file_modeling_tasks'][target]['consecutive_days']
 
-        # Predict file completion
-        #horizon = project['horizon']  # Prediction horizon in days
-        #threshold = project['theshold']  # Completion criterion: 10% change
-        #consecutive_days = project['consecutive_days']  # Criterion must be met for 7 consecutive days
         completion_date = await file_visualiser.predict_completion(target, horizon, threshold, consecutive_days)
 
         if completion_date:
@@ -98,6 +91,11 @@ async def process_project(project):
                 recluster=recluster
             ))
 
+        if cluster_combined_df is None or cluster_combined_df.empty:
+            logging.error(f"Cluster combined dataframe is None or empty for project {project_name}!")
+        else:
+            logging.info(f"Cluster combined dataframe preview:\n{cluster_combined_df.head()}")
+
         if replot:
             logging.info(f"Replotting enabled for project: {project_name}")
             cooccurrence_analyser.plot(
@@ -121,6 +119,7 @@ async def process_project(project):
             ])
 
             if cluster_enabled and cluster_combined_df is not None:
+                logging.info(f"I am inside the task. Clusters found: {cluster_combined_df['cluster'].unique()}")
                 tasks.extend([process_file_visualiser(
                     api_connection, project_name, None, commit_visualiser, models, target,
                     all_file_features, project, cluster_combined_df=cluster_combined_df
