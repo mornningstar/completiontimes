@@ -2,8 +2,8 @@ import logging
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
+from src.data_handling.clustering.cluster_aggregator import ClusterAggregator
 from src.predictions.machine_learning.lstmmodel import LSTMModel
 from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 
@@ -41,6 +41,10 @@ def handle_gaps(data, target_types):
     for target_type in target_types:
         method = GAP_HANDLING_METHODS.get(target_type, None)
 
+        if not method:
+            logging.warning(f"Skipping gap handling for {target_type}: No method defined.")
+            return data
+
         if method == 'ffill':
             logging.info(f'Ffilling gaps for {target_type}')
             data = data.resample('D').ffill()
@@ -61,9 +65,25 @@ def handle_gaps(data, target_types):
     return data
 
 
+def infer_raw_target(cluster_target: str) -> str:
+    """
+    Infers the base metric from a cluster-level target.
+
+    For example:
+      - If the target is 'cluster_cumulative_size', return 'size'
+      - Otherwise, if the target starts with 'cluster_', remove that prefix.
+    """
+    if "cumulative" in cluster_target:
+        # For cumulative metrics, we typically want to aggregate the raw 'size'
+        return "size"
+    elif cluster_target.startswith("cluster_"):
+        return cluster_target[len("cluster_"):]
+    else:
+        return cluster_target
+
 
 class FileDataHandler:
-    def __init__(self, api_connection, file_path, targets, all_file_features, cluster):
+    def __init__(self, api_connection, file_path, targets, all_file_features, cluster_combined_df, cluster):
         self.logging = logging.getLogger(self.__class__.__name__)
         self.api_connection = api_connection
         self.file_path = file_path
@@ -74,17 +94,21 @@ class FileDataHandler:
         self.clusterdata_df = None
         self.all_file_features = all_file_features
 
+        self.cluster_combined_df = cluster_combined_df
+
         self.cluster = cluster
+        self.target_contains_cumulative = "cumulative" in self.targets[0]
 
-    async def run(self, cluster_time_series=None):
-        self.process_data(cluster_time_series=cluster_time_series)
+        self.raw_target = infer_raw_target(self.targets[0]) if self.cluster else self.targets[0]
 
-    def process_data(self, cluster_time_series=None):
+
+    async def process_data(self):
         print("Processing data in DataHandler")
 
         if not self.cluster:
             features_df = self.all_file_features[self.all_file_features["path"] == self.file_path].copy()
             features_df.index = pd.to_datetime(features_df.index).tz_localize(None)
+            features_df.index = features_df.index.normalize()
 
             if features_df.index.duplicated().any():
                 self.logging.warning("Duplicate timestamps found in features_df. Aggregating values.")
@@ -100,39 +124,60 @@ class FileDataHandler:
             self.filedata_df = features_df[relevant_features]
 
         elif self.cluster:
-            if not cluster_time_series:
-                raise ValueError("Cluster mode requires 'cluster_time_series' input.")
+            cluster_time_series = {}
 
-            print("Processing clusters. Cluster time series keys:", cluster_time_series.keys())
-            print("Cluster time series data:", cluster_time_series)
-            print(type(cluster_time_series))
+            for cluster_id, cluster_files in self.cluster_combined_df.groupby("cluster"):
 
-            cluster_dfs = []
-            for cluster_id, time_series in cluster_time_series.items():
-                cluster_df = pd.DataFrame(time_series)
+                file_paths = set(cluster_files["file1"]).union(set(cluster_files["file2"]))
 
-                # Set index as datetime
-                if 'date' in cluster_df.columns:
-                    cluster_df.set_index(pd.to_datetime(cluster_df['date']).dt.tz_localize(None), inplace=True)
-                    cluster_df.drop(columns=['date'], inplace=True)
+                file_features = self.all_file_features[self.all_file_features["path"].isin(file_paths)].copy()
 
-                # Handle duplicates in cluster_df
-                if cluster_df.index.duplicated().any():
-                    self.logging.warning(f"Duplicate timestamps found for Cluster {cluster_id}. Aggregating values.")
+                if file_features.empty:
+                    logging.warning(f"No valid files found for cluster {cluster_id}")
+                    continue
 
-                    numeric_columns = cluster_df.select_dtypes(include=["number"]).columns
-                    cluster_df = cluster_df.groupby(cluster_df.index.date)[numeric_columns].mean()
-                    cluster_df.index = pd.to_datetime(cluster_df.index)
+                file_features.index = pd.to_datetime(file_features.index).normalize()
+                min_date = file_features.index.min()
+                max_date = file_features.index.max()
+                full_date_range = pd.date_range(start=min_date, end=max_date, freq="D")
+                print(f"Cluster {cluster_id}: Date range from {min_date} to {max_date}")
 
-                # Sort index and handle gaps for each feature
-                cluster_df.sort_index(inplace=True)
-                for feature in cluster_df.columns:
-                    cluster_df[feature] = handle_gaps(cluster_df[feature], feature)
+                processed_files = []
 
-                cluster_df["cluster_id"] = cluster_id
-                cluster_dfs.append(cluster_df)
+                for file_path in file_paths:
+                    file_data = file_features[file_features["path"] == file_path].copy()
 
-            self.clusterdata_df = pd.concat(cluster_dfs)
+                    if file_data.empty:
+                        print(f"No data found for file {file_path} in cluster {cluster_id}")
+
+                    if file_data.index.duplicated().any():
+                        logging.warning(f"Duplicate timestamps found for {file_path}. Aggregating values.")
+                        numeric_columns = file_data.select_dtypes(include=["number"]).columns
+                        file_data = file_data.groupby(file_data.index)[numeric_columns].max()
+
+                    file_data = file_data.reindex(full_date_range)
+                    print(f"File {file_path}: Reindexed, now has {len(file_data)} rows.")
+
+                    file_data[self.raw_target] = handle_gaps(file_data[self.raw_target], self.raw_target)
+
+                    for target in [self.raw_target]:
+                        first_valid_index = file_data[target].first_valid_index()
+                        if first_valid_index is not None:
+                            file_data.loc[file_data.index < first_valid_index, target] = 0
+
+                    file_data["path"] = file_path
+
+                    processed_files.append(file_data)
+
+                # Combine all processed files for this cluster
+                cluster_time_series[cluster_id] = pd.concat(processed_files)
+
+                if not processed_files:
+                    print(f"No processed files for cluster {cluster_id}!")
+                else:
+                    print(f"Cluster {cluster_id}: Processed {len(processed_files)} files.")
+
+            return cluster_time_series
 
     def validate_target(self, target):
         if not self.cluster:
@@ -207,13 +252,19 @@ class FileDataHandler:
         data.dropna(subset=[target], inplace=True)
         data.sort_index(inplace=True)
 
-        train, test = train_test_split(data, test_size=test_size, shuffle=False)
+        train_size = int(len(data) * (1 - test_size))
+
+        train = data.iloc[:train_size].copy()  # Ensure copy
+        test = data.iloc[train_size:].copy()
 
         x_train = train.index.tz_localize(None)
-        y_train = train[target]
+        y_train = train[target].values
 
         x_test = test.index.tz_localize(None)
-        y_test = test[target]
+        y_test = test[target].values
+
+        print(f"x_train length: {len(x_train)}, y_train length: {len(y_train)}")
+        print(f"x_test length: {len(x_test)}, y_test length: {len(y_test)}")
 
         return x_train, x_test, y_train, y_test
 
@@ -272,20 +323,9 @@ class FileDataHandler:
 
         return cluster_data
 
-    def aggregate_cluster_features(self, cluster_combined_df, date_col="date"):
-        cluster_time_series = {}
+    def aggregate_cluster_features(self, cluster_time_series):
+        aggregator = ClusterAggregator(self.raw_target, self.target_contains_cumulative)
+        aggregated_clusters_df = aggregator.aggregate_cluster_features(cluster_time_series)
+        self.clusterdata_df = aggregated_clusters_df
 
-        for cluster_id, cluster_files in cluster_combined_df.groupby("cluster"):
-            file_paths = cluster_files["file1"].tolist() + cluster_files["file2"].tolist()
-
-            file_features = self.all_file_features[self.all_file_features["path"].isin(file_paths)]
-
-            if file_features.empty:
-                self.logging.warning(f"No valid files found for cluster {cluster_id}")
-                continue
-
-            # Aggregate features by date
-            aggregated_features = file_features.groupby(date_col)[self.targets].mean()
-            cluster_time_series[cluster_id] = aggregated_features
-
-        return cluster_time_series
+        return aggregated_clusters_df

@@ -3,8 +3,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from statsmodels.tsa.stattools import adfuller
 
-from src.data_handling.async_database import AsyncDatabase
-from src.data_handling.repository_size_handling import RepoSizeHandler
+from src.data_handling.database.async_database import AsyncDatabase
+from src.data_handling.repository.repository_size_handling import RepoSizeHandler
 from src.predictions.model_training import ModelTrainer
 from src.visualisations.plotting import Plotter
 

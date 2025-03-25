@@ -5,7 +5,7 @@ from kneed import KneeLocator
 from matplotlib import pyplot as plt
 from sklearn.cluster import KMeans
 
-from src.data_handling.async_database import AsyncDatabase
+from src.data_handling.database.async_database import AsyncDatabase
 
 
 class ClusterAnalyser:

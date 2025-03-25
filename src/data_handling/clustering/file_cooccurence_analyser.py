@@ -10,7 +10,7 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from sklearn.preprocessing import StandardScaler
 
-from src.data_handling.cluster_analyser import ClusterAnalyser
+from src.data_handling.clustering.cluster_analyser import ClusterAnalyser
 from src.visualisations.plotting import Plotter
 
 
@@ -171,8 +171,6 @@ class FileCooccurenceAnalyser:
             else 0,
             axis=1
         )
-        max_cooccurrence = filtered_cooccurrence_df.values.max()
-        max_distance = filtered_proximity_df['distance'].max()
 
         cooccurrence_values = filtered_proximity_df['cooccurrence']
         distance_values = filtered_proximity_df['distance']
@@ -198,21 +196,16 @@ class FileCooccurenceAnalyser:
             how='left'
         )
 
+        combined_df["cumulative_size"] = (
+                combined_df["cumulative_size_file1"] +
+                combined_df["cumulative_size_file2"]
+        )
 
         self.scaler = StandardScaler()
         combined_df[['cooccurrence_scaled', 'distance_scaled']] = self.scaler.fit_transform(
             combined_df[['cooccurrence', 'distance']]
         )
-        numerical_cols = [col for col in combined_df.columns if
-                          'size' in col or 'rolling' in col or 'cumulative' in col]
 
-        if numerical_cols:
-            combined_df[numerical_cols] = self.scaler.fit_transform(combined_df[numerical_cols])
-
-        print("Mean: ", combined_df[['cooccurrence_scaled', 'distance_scaled']].mean())
-        print("Standard deviation", combined_df[['cooccurrence_scaled', 'distance_scaled']].std())
-
-        # Log remaining NaNs
         nan_counts = combined_df.isnull().sum()
         self.logging.info(f"NaN counts after merge and scaling:\n{nan_counts[nan_counts > 0]}")
 
