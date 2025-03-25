@@ -23,7 +23,7 @@ class ModelTrainer:
 
             try:
 
-                self.logger.info(f"Starting training for {model_name}")
+                self.logger.info(f"Starting training for {model_class}")
                 model = model_class()
 
                 # Hyperparameter Tuning

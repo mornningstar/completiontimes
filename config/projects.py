@@ -24,7 +24,7 @@ PROJECTS = [
         },
 
         'file_modeling_tasks': {
-            'cumulative_size': {
+            'cluster_cumulative_size': {
                 #'files': ['src/khoj/database/adapters/__init__.py'],
                 'cluster': True,
                 'horizon': 30,

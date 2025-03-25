@@ -1,4 +1,4 @@
-from src.data_handling.repodata_handler import RepoDataHandler
+from src.data_handling.repository.repodata_handler import RepoDataHandler
 from src.predictions.machine_learning.lstmmodel import LSTMModel
 from src.predictions.model_training import ModelTrainer
 from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase

@@ -74,7 +74,12 @@ class ProphetModel(BaseModel):
         return self.best_params
 
     def train(self, x_train, y_train, refit=False):
+        if len(x_train) != len(y_train):
+            raise ValueError(f"Mismatch: x_train({len(x_train)}) != y_train({len(y_train)})")
+
         df_train = pd.DataFrame({"ds": x_train, "y": y_train}).dropna()
+
+        df_train["ds"] = df_train["ds"].dt.tz_localize(None)
 
         if not self.best_params and not refit:
             self.best_params = self.tune_hyperparameters(df_train)
@@ -87,8 +92,8 @@ class ProphetModel(BaseModel):
         self.logger.info("Model training/refitting completed.")
 
     def predict(self, x_test):
-        # Prophet expects a DataFrame with 'ds' column for dates
         df_future = pd.DataFrame({"ds": x_test})
+        df_future["ds"] = pd.to_datetime(df_future["ds"]).dt.tz_localize(None)
 
         predictions = self.model.predict(df_future)["yhat"].values
 

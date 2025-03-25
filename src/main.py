@@ -3,9 +3,9 @@ import logging
 import platform
 
 from config.projects import PROJECTS
-from src.data_handling.api_connection_async import APIConnectionAsync
-from src.data_handling.file_cooccurence_analyser import FileCooccurenceAnalyser
-from src.data_handling.file_feature_engineering import FileFeatureEngineer
+from src.data_handling.database.api_connection_async import APIConnectionAsync
+from src.data_handling.clustering.file_cooccurence_analyser import FileCooccurenceAnalyser
+from src.data_handling.features.file_feature_engineering import FileFeatureEngineer
 from src.visualisations.commit_visualiser import CommitVisualiser
 from src.visualisations.file_visualiser import FileVisualiser
 
@@ -36,7 +36,7 @@ async def process_file_visualiser(api_connection, project_name, file_path, commi
         models,
         [target],
         all_file_features,
-        cluster_combined_df=cluster_combined_df,  # Pass the precomputed clusters
+        cluster_combined_df=cluster_combined_df,
         )
 
     try:
@@ -72,12 +72,9 @@ async def process_project(project):
         logging.info(f"Starting processing for project: {project_name}")
         await api_connection.populate_db()
 
-        # Centralised feature engineering
         logging.info(f"Running feature engineering for project: {project_name}")
         feature_engineer = FileFeatureEngineer(api_connection, project_name)
-        all_file_features = await feature_engineer.run()  # Calculate features for all files
-
-        print(all_file_features.head(5))
+        all_file_features = await feature_engineer.run()
 
         commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
         await commit_visualiser.get_commits()
