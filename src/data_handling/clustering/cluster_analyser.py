@@ -1,10 +1,11 @@
+import asyncio
 import logging
 
-import asyncio
+import cupy as cp
 import pandas as pd
+from cuml.cluster import KMeans as cuKMeans
 from kneed import KneeLocator
-from matplotlib import pyplot as plt
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import KMeans
 
 from src.data_handling.database.async_database import AsyncDatabase
 
@@ -32,11 +33,20 @@ class ClusterAnalyser:
         k_range = range(1, max_k + 1)
         models = {}
 
-        for k in k_range:
-            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42)
-            kmeans.fit(self.numerical_df_for_clustering)
-            inertia.append(kmeans.inertia_)
-            models[k] = kmeans
+        data = self.numerical_df_for_clustering.to_numpy().astype('float32')
+
+        if cp.cuda.is_available():
+            for k in k_range:
+                kmeans = cuKMeans(n_clusters=k, random_state=42)
+                kmeans.fit(data)
+                inertia.append(kmeans.inertia_)
+                models[k] = kmeans
+        else:
+            for k in k_range:
+                kmeans = KMeans(n_clusters=k, random_state=42)
+                kmeans.fit(data)
+                inertia.append(kmeans.inertia_)
+                models[k] = kmeans
 
         # Using KneeLocator to find the "elbow" point
         knee_locator = KneeLocator(k_range, inertia, curve="convex", direction="decreasing")
@@ -48,7 +58,6 @@ class ClusterAnalyser:
 
         self.kmeans_optimal = models[self.optimal_k]
 
-        # Plot the Elbow Method (optional for visualization)
         self.plotter.plot_elbow_method(k_range, inertia, self.optimal_k)
 
         self.logging.info("Found optimal number of clusters at k = {}".format(self.optimal_k))
@@ -66,7 +75,10 @@ class ClusterAnalyser:
         self.logging.info("Running clustering analysis...")
 
         self.logging.info("Fitting KMeans on numerical data...")
-        cluster_labels = self.kmeans_optimal.predict(self.numerical_df_for_clustering)
+
+        data = self.numerical_df_for_clustering.to_numpy().astype('float32')
+        cluster_labels = self.kmeans_optimal.predict(data)
+
         self.combined_df['cluster'] = cluster_labels
         self.logging.info("Clustering completed.")
 
