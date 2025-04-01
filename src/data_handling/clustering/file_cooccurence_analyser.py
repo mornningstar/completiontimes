@@ -1,18 +1,16 @@
 import logging
 import os
-#import cupy as cp
+import cupy as cp
 from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
-from scipy.cluster.hierarchy import linkage, dendrogram
-from scipy.spatial.distance import squareform
-#from scipy.sparse import csr_matrix
-from cupyx.scipy.sparse import csr_matrix
 from sklearn.preprocessing import StandardScaler
+from cupyx.scipy.sparse import csr_matrix as cupy_csr_matrix
+from scipy.sparse import csr_matrix
 
 from src.data_handling.clustering.cluster_analyser import ClusterAnalyser
+from src.visualisations.cluster_plotting import ClusterPlotter
 from src.visualisations.plotting import Plotter
 
 
@@ -41,7 +39,7 @@ class FileCooccurrenceAnalyser:
         self.api_connection = api_connection
         self.project_name = project_name
 
-        self.plotter = Plotter(project_name=project_name)
+        self.plotter = ClusterPlotter(project_name=project_name)
         self.cooccurrence_matrix = defaultdict(lambda: defaultdict(int))
 
     async def run(self, recluster=False):
@@ -117,31 +115,35 @@ class FileCooccurrenceAnalyser:
 
         # 4. Berechne die Co-Occurrence Matrix als X.T * X
         # Dabei zählt (i,j) die Anzahl der Commits, in denen beide Dateien vorkommen.
-        #if cp.cuda.is_available():
-        #    one_hot_cp = cp.asarray(one_hot.values)
-        #    one_hot_sparse = csr_matrix(one_hot_cp)
-        #    cooccurrence_sparse = one_hot_sparse.T.dot(one_hot_sparse)
-        #    cooccurrence_matrix = cp.asnumpy(cooccurrence_sparse.toarray())
+        if cp.cuda.is_available():
+            self.logging.info("Using CUDA for building co-occurrence matrix.")
 
-        one_hot_sparse = csr_matrix(one_hot.values)
-        cooccurrence_sparse = one_hot_sparse.T.dot(one_hot_sparse)
-        cooccurrence_matrix = cooccurrence_sparse.toarray()
+            one_hot_cp = cp.asarray(one_hot.values, dtype=cp.float32)
+            one_hot_sparse = cupy_csr_matrix(one_hot_cp)
+            cooccurrence_sparse = one_hot_sparse.T.dot(one_hot_sparse)
+            cooccurrence_matrix = cp.asnumpy(cooccurrence_sparse.toarray())
+        else:
+            self.logging.info("No CUDA available for building co-occurrence matrix.")
+
+            one_hot_sparse = csr_matrix(one_hot.values.astype('float32'))
+            cooccurrence_sparse = one_hot_sparse.T.dot(one_hot_sparse)
+            cooccurrence_matrix = cooccurrence_sparse.toarray()
 
         #cooccurrence_matrix = one_hot.T.dot(one_hot)
 
         self.logging.debug("Finished 4.")
 
         # 5. Setze die Diagonale auf 0 (da wir nicht an Selbstpaaren interessiert sind)
-        np.fill_diagonal(cooccurrence_matrix.values, 0)
+        np.fill_diagonal(cooccurrence_matrix, 0)
 
         self.logging.debug("Finished 5.")
 
         # 6. Umwandeln in DataFrames mit passenden Indizes und Spalten
-        cooccurrence_df = pd.DataFrame(cooccurrence_matrix.to_numpy(), index=one_hot.columns, columns=one_hot.columns)
+        cooccurrence_df = pd.DataFrame(cooccurrence_matrix, index=one_hot.columns, columns=one_hot.columns)
 
         self.logging.debug("Finished 6.")
 
-        # 7. Kategorisierung: Wende die kategorise-Funktion auf alle Werte an.
+        # 7. Kategorisierung: Wende die categorise-Funktion auf alle Werte an.
         #    Dabei wird das gesamte Wertefeld als Referenz für die Prozentile genutzt.
         all_values = cooccurrence_df.values.flatten()
         low_threshold, high_threshold = np.percentile(all_values, [25, 75])
@@ -159,7 +161,7 @@ class FileCooccurrenceAnalyser:
         # Hole alle Dateipfade aus der Co-Occurrence-Matrix
         file_paths = cooccurrence_df.index.tolist()
         files = pd.Series(file_paths)
-        depths = files.str.count(os.sep)
+        depths = files.str.count(os.sep).values
 
         # 1. Berechne die Verzeichnistiefe (Anzahl der os.sep) für jeden Pfad
         depth_matrix = np.add.outer(depths, depths)
@@ -175,11 +177,11 @@ class FileCooccurrenceAnalyser:
         mask = np.ones((n, n), dtype=bool)
 
         for level in range(max_len):
-            level_vals = split_df[level].values # Werte der aktuellen Verzeichnisebene (als Array)
-            eq_matrix = (level_vals[:, None] == level_vals[None, :]) # Vergleiche alle Paare auf dieser Ebene (Broadcasting)
-            new_matches = mask & eq_matrix # Aktualisiere: Zähle nur, wo bisherige Ebenen übereinstimmten UND jetzt auch
+            level_vals = split_df[level].values
+            eq_matrix = (level_vals[:, None] == level_vals[None, :])
+            new_matches = mask & eq_matrix
             common_depth_matrix[new_matches] += 1
-            mask = mask & eq_matrix # Aktualisiere die Maske: Nur Paare, die auch auf dieser Ebene übereinstimmen, bleiben True
+            mask = mask & eq_matrix
 
         # 4. Berechne die finale Distanzmatrix
         distance_matrix = depth_matrix - 2 * common_depth_matrix
@@ -215,11 +217,10 @@ class FileCooccurrenceAnalyser:
             cooccurrence_df.columns.intersection(tracked_files)
         ]
 
-        cooccurrence_long = (
-            filtered_cooccurrence_df.reset_index()
-            .melt(id_vars='index', var_name='file2', value_name='cooccurrence')
-            .rename(columns={'index': 'file1'})
-        )
+        df_reset = filtered_cooccurrence_df.reset_index()
+        df_reset = df_reset.rename(columns={df_reset.columns[0]: 'file1'})
+
+        cooccurrence_long = df_reset.melt(id_vars='file1', var_name='file2', value_name='cooccurrence')
 
         # Merge den langen Co‑Occurrence-DataFrame mit proximity_long
         proximity_long = proximity_long.merge(
@@ -229,11 +230,13 @@ class FileCooccurrenceAnalyser:
         )
 
         # 4. Kategorisiere die Werte (Nutzung der bestehenden categorise-Funktion)
-        distance_values = proximity_long['distance']
-        cooccurrence_values = proximity_long['cooccurrence']
-        proximity_long['distance_level'] = proximity_long['distance'].apply(lambda x: categorise(x, distance_values))
+        low_distance, high_distance = np.percentile(proximity_long['distance'], [25, 75])
+        proximity_long['distance_level'] = proximity_long['distance'].apply(
+            lambda x: categorise(x, low_distance, high_distance))
+
+        low_cooccurrence, high_cooccurrence = np.percentile(proximity_long['cooccurrence'], [25, 75])
         proximity_long['cooccurrence_level'] = proximity_long['cooccurrence'].apply(
-            lambda x: categorise(x, cooccurrence_values))
+            lambda x: categorise(x, low_cooccurrence, high_cooccurrence))
 
         # 5. Füge File-Features zu den jeweiligen Dateien hinzu
         combined_df = proximity_long.merge(
@@ -267,7 +270,7 @@ class FileCooccurrenceAnalyser:
 
         # Hierarchical Co-Occurrence
         if plot_options.get('hierarchical', False):
-            self.plot_hierarchical_cooccurrence(cooccurrence_df)
+            self.plotter.plot_hierarchical_cooccurrence(cooccurrence_df)
 
         # Plot co-occurrence matrix
         if plot_options.get('cooccurrence_matrix', False):
@@ -323,29 +326,6 @@ class FileCooccurrenceAnalyser:
         if plot_options.get('zipf_distribution', False):
             self.logging.info("Plotting Zipf distribution.")
             self.plotter.plot_zipf_distribution(cooccurrence_df)
-
-    def plot_hierarchical_cooccurrence(self, cooccurrence_df):
-        if cooccurrence_df.isnull().values.any():
-            self.logging.warning("NaN values in cooccurrence_df. Filling with 0.")
-            cooccurrence_df = cooccurrence_df.fillna(0)
-
-        max_cooccurrence = cooccurrence_df.values.max()
-        normalized_cooccurrence = cooccurrence_df.fillna(0) / max_cooccurrence
-
-        distance_matrix = 1 - normalized_cooccurrence
-        np.fill_diagonal(distance_matrix.values, 0)
-
-        #distance_matrix = np.clip(distance_matrix, 0, 1)
-
-        linked = linkage(squareform(distance_matrix), method='ward')
-
-        plt.figure(figsize=(12, 8))
-        dendrogram(linked, labels=cooccurrence_df.index, orientation='right', leaf_font_size=8)
-        plt.title("File Clustering Dendrogram")
-        plt.xlabel("Distance")
-        plt.ylabel("Files")
-
-        self.plotter.save_plot('hierarchical_cooccurrence.png')
 
     def get_combined_data_matrix(self, combined_df):
         matrix = (combined_df[['cooccurrence_level', 'distance_level']]

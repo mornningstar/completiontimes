@@ -49,17 +49,7 @@ class ClusterAnalyser:
         self.kmeans_optimal = models[self.optimal_k]
 
         # Plot the Elbow Method (optional for visualization)
-        plt.figure(figsize=(8, 6))
-        plt.plot(k_range, inertia, marker='o')
-        plt.title('Elbow Method for Optimal k')
-        plt.xlabel('Number of Clusters (k)')
-        plt.ylabel('Inertia')
-        plt.xticks(k_range)
-        plt.axvline(self.optimal_k, color='red', linestyle='--', label=f'Optimal k = {self.optimal_k}')
-        plt.legend()
-
-        self.plotter.save_plot("optimal_k.png")
-        plt.close()
+        self.plotter.plot_elbow_method(k_range, inertia, self.optimal_k)
 
         self.logging.info("Found optimal number of clusters at k = {}".format(self.optimal_k))
         return self.optimal_k
@@ -113,7 +103,6 @@ class ClusterAnalyser:
 
         summary_df = self.analyse_clusters()
 
-        self.logging.info("Plotting clusters...")
         self.plotter.plot_clusters(self.combined_df)
 
         self.logging.info("Clustering analysis completed.")
@@ -123,7 +112,6 @@ class ClusterAnalyser:
         """
         Analyses each cluster and saves visualisations and summaries for each cluster.
         """
-        cluster_summaries = []
         if 'cooccurrence_scaled' not in self.combined_df.columns or 'distance_scaled' not in self.combined_df.columns:
             self.logging.error("Scaled columns are missing. Ensure data is scaled before analysis.")
             return
@@ -133,20 +121,17 @@ class ClusterAnalyser:
             avg_distance=('distance', 'mean')
         ).reset_index()
 
-        # Vereine beide Datei-Spalten zu einer Spalte "file"
         files_long = pd.concat([
             self.combined_df[['cluster', 'file1']].rename(columns={'file1': 'file'}),
             self.combined_df[['cluster', 'file2']].rename(columns={'file2': 'file'})
         ])
 
-        # Gruppiere nach Cluster und zähle die eindeutigen Dateien
         file_counts = files_long.groupby('cluster')['file'].nunique().reset_index().rename(
             columns={'file': 'file_count'})
 
-        # Füge die aggregierten Werte zusammen
         summary_df = cluster_agg.merge(file_counts, on='cluster')
 
-        self.plot_cluster_analysis()
+        self.plotter.plot_cluster_analysis(self.combined_df)
 
         return summary_df
 
@@ -157,31 +142,9 @@ class ClusterAnalyser:
             self.combined_df[['cluster', 'file2', 'cooccurrence']].rename(columns={'file2': 'file'})
         ])
 
-        # Gruppiere nach Datei und aggregiere:
-        # - cluster: Der Modus (häufigster Wert) wird als repräsentativer Cluster gewählt.
-        # - cooccurrence: Die Summe aller Co‑Occurrence-Werte.
         features_df = files_long.groupby('file').agg(
             cluster=('cluster', lambda x: x.mode()[0] if not x.mode().empty else None),
             cooccurrence=('cooccurrence', 'sum')
         ).reset_index()
 
         return features_df
-
-    def plot_cluster_analysis(self):
-        """
-        Plots scatter plots for each cluster based on the scaled co-occurrence and distance values.
-        """
-        for cluster, cluster_data in self.combined_df.groupby('cluster'):
-            plt.figure(figsize=(10, 8))
-            plt.scatter(
-                cluster_data['cooccurrence_scaled'],
-                cluster_data['distance_scaled'],
-                alpha=0.6,
-                label=f'Cluster {cluster}'
-            )
-            plt.xlabel('Co-occurrence (scaled)')
-            plt.ylabel('Distance (scaled)')
-            plt.title(f'Cluster {cluster} Analysis')
-            plt.legend()
-            self.plotter.save_plot(f'cluster_{cluster}_analysis.png')
-            plt.close()
