@@ -4,7 +4,7 @@ import platform
 
 from config.projects import PROJECTS
 from src.data_handling.database.api_connection_async import APIConnectionAsync
-from src.data_handling.clustering.file_cooccurence_analyser import FileCooccurenceAnalyser
+from src.data_handling.clustering.file_cooccurence_analyser import FileCooccurrenceAnalyser
 from src.data_handling.features.file_feature_engineering import FileFeatureEngineer
 from src.visualisations.commit_visualiser import CommitVisualiser
 from src.visualisations.file_visualiser import FileVisualiser
@@ -79,14 +79,17 @@ async def process_project(project):
         commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
         await commit_visualiser.get_commits()
 
-        cooccurrence_analyser = FileCooccurenceAnalyser(
+        cooccurrence_analyser = FileCooccurrenceAnalyser(
             commit_visualiser.commit_data, project_name, api_connection, all_file_features
         )
 
-        cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await \
-            (cooccurrence_analyser.run(
-                recluster=recluster
-            ))
+        #cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await (
+        #    cooccurrence_analyser.run(recluster=recluster))
+        
+        cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await asyncio.to_thread(
+            lambda: asyncio.run(cooccurrence_analyser.run(recluster=recluster))
+        )
+
 
         if cluster_combined_df is None or cluster_combined_df.empty:
             logging.error(f"Cluster combined dataframe is None or empty for project {project_name}!")

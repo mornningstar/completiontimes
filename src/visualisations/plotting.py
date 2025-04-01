@@ -354,3 +354,20 @@ class Plotter:
         plt.title('File Pair Clustering by Co-occurrence and Distance')
         plt.colorbar(label='Cluster')
         self.save_plot('clusters.png')
+
+    def plot_refit_predictions(self, historical_series, future_dates, future_values, label, target):
+        """
+        Plots the historical data plus the new refit forecast.
+        """
+        plt.figure(figsize=(10, 6))
+        # 1) Plot historical data
+        plt.plot(historical_series.index, historical_series.values, label='Historical Data')
+        # 2) Plot future predictions
+        plt.plot(future_dates, future_values, 'r--', label=f'Refit Forecast ({label})')
+
+        plt.title(f"Refit Forecast for {label} {target}")
+        plt.xlabel("Date")
+        plt.ylabel(target)
+        plt.legend()
+        self.save_plot(f"{label}_{target}_refit.png")
+        plt.close()

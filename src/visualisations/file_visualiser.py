@@ -121,6 +121,12 @@ class FileVisualiser:
 
                 future_dates, pred = self.model_trainer.refit_model(model, full_x_train, full_y_train, steps=steps)
 
+                model_info = self.model_info[model.__class__.__name__]
+                model_info["refit_future_dates"] = future_dates
+                model_info["refit_predictions"] = pred
+
+                self.plotter.plot_refit_predictions(full_data, future_dates, pred, cluster_id, target)
+
                 percentage_changes = [
                     (pred[i] - pred[i - 1]) / pred[i - 1] * 100 for i in range(1, len(pred))
                 ]

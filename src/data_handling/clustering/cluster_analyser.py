@@ -1,16 +1,18 @@
 import logging
 
+import asyncio
 import pandas as pd
 from kneed import KneeLocator
 from matplotlib import pyplot as plt
-from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
 
 from src.data_handling.database.async_database import AsyncDatabase
 
 
 class ClusterAnalyser:
     def __init__(self, combined_df, plotter, api_connection):
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.kmeans_optimal = None
+        self.logging = logging.getLogger(self.__class__.__name__)
         self.combined_df = combined_df
         self.numerical_df_for_clustering = self.combined_df[['cooccurrence_scaled', 'distance_scaled']]
 
@@ -24,18 +26,27 @@ class ClusterAnalyser:
         Finds the optimal number of clusters for given data using the Elbow Method.
         :param max_k: Maximum number of clusters to try.
         """
-        logging.info("Finding optimal number of clusters")
+        self.logging.info("Searching for optimal number of clusters...")
+
         inertia = []
         k_range = range(1, max_k + 1)
+        models = {}
 
         for k in k_range:
-            kmeans = KMeans(n_clusters=k, random_state=42)
+            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42)
             kmeans.fit(self.numerical_df_for_clustering)
             inertia.append(kmeans.inertia_)
+            models[k] = kmeans
 
         # Using KneeLocator to find the "elbow" point
         knee_locator = KneeLocator(k_range, inertia, curve="convex", direction="decreasing")
         self.optimal_k = knee_locator.elbow
+
+        if self.optimal_k is None:
+            self.logging.warning("No clear elbow found, defaulting to max_k = %d", max_k)
+            self.optimal_k = max_k
+
+        self.kmeans_optimal = models[self.optimal_k]
 
         # Plot the Elbow Method (optional for visualization)
         plt.figure(figsize=(8, 6))
@@ -48,52 +59,64 @@ class ClusterAnalyser:
         plt.legend()
 
         self.plotter.save_plot("optimal_k.png")
+        plt.close()
 
-        logging.info("Found optimal number of clusters at k = {}".format(self.optimal_k))
+        self.logging.info("Found optimal number of clusters at k = {}".format(self.optimal_k))
         return self.optimal_k
 
-    async def run_clustering_analysis(self, k=4):
+    async def run_clustering_analysis(self):
         """
-        Performs KMeans clustering with the specified number of clusters (k) and
-        analyses the resulting clusters.
+        Uses the pre-trained model from find_optimal_clusters to assign cluster labels.
+        If k is provided, it is ignored; ensure find_optimal_clusters() was called before.
         """
-        logging.info("Running clustering analysis")
+        if self.kmeans_optimal is None:
+            self.logging.error("No trained KMeans model available. Run find_optimal_clusters() first.")
+            return
 
-        logging.info("Initializing KMeans...")
-        kmeans = KMeans(n_clusters=k, random_state=42)
-        logging.info("Fitting KMeans on numerical data...")
-        cluster_labels = kmeans.fit_predict(self.numerical_df_for_clustering)
-        logging.info("Clustering completed.")
+        self.logging.info("Running clustering analysis...")
 
+        self.logging.info("Fitting KMeans on numerical data...")
+        cluster_labels = self.kmeans_optimal.predict(self.numerical_df_for_clustering)
         self.combined_df['cluster'] = cluster_labels
+        self.logging.info("Clustering completed.")
 
-        updated_files = set()
-        logging.info("Updating clusters in the database for %d rows...", len(self.combined_df))
+        self.logging.info("Updating clusters in the database for %d rows...", len(self.combined_df))
 
         unique_files = pd.concat([self.combined_df['file1'], self.combined_df['file2']]).unique()
+        update_tasks = []
+
         for file in unique_files:
             rows_with_file = self.combined_df[
                 (self.combined_df['file1'] == file) | (self.combined_df['file2'] == file)
                 ]
             cluster_id = int(rows_with_file['cluster'].mode()[0])
-            try:
-                await AsyncDatabase.update_one(
-                    self.api_connection.file_tracking_collection,
-                    {'path': file},
-                    {'$set': {'cluster': cluster_id}}
-                )
-                logging.debug("Updated cluster ID %d for file %s", cluster_id, file)
-            except Exception as e:
-                logging.error(f"Failed to save cluster for {file}: {e}")
 
-        logging.info("All cluster IDs updated in the database.")
+            task = AsyncDatabase.update_one(
+                self.api_connection.file_tracking_collection,
+                {'path': file},
+                {'$set': {'cluster': cluster_id}}
+            )
+
+            update_tasks.append(task)
+
+        batch_size = max(1, int(0.1 * len(update_tasks)))
+        for i in range(0, len(update_tasks), batch_size):
+            batch = update_tasks[i:i + batch_size]
+            results = await asyncio.gather(*batch, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    self.logging.error("Error updating cluster for a file: %s", result)
+                else:
+                    self.logging.debug("Successfully updated cluster for a file.")
+
+        self.logging.info("All cluster IDs updated in the database.")
 
         summary_df = self.analyse_clusters()
 
-        logging.info("Plotting clusters...")
+        self.logging.info("Plotting clusters...")
         self.plotter.plot_clusters(self.combined_df)
 
-        logging.info("Clustering analysis completed.")
+        self.logging.info("Clustering analysis completed.")
         return self.combined_df, summary_df
 
     def analyse_clusters(self):
@@ -102,25 +125,53 @@ class ClusterAnalyser:
         """
         cluster_summaries = []
         if 'cooccurrence_scaled' not in self.combined_df.columns or 'distance_scaled' not in self.combined_df.columns:
-            self.logger.error("Scaled columns are missing. Ensure data is scaled before analysis.")
+            self.logging.error("Scaled columns are missing. Ensure data is scaled before analysis.")
             return
 
-        for cluster in self.combined_df['cluster'].unique():
-            cluster_data = self.combined_df[self.combined_df['cluster'] == cluster]
+        cluster_agg = self.combined_df.groupby('cluster').agg(
+            avg_cooccurrence=('cooccurrence', 'mean'),
+            avg_distance=('distance', 'mean')
+        ).reset_index()
 
-            avg_cooccurrence = cluster_data['cooccurrence'].mean()
-            avg_distance = cluster_data['distance'].mean()
+        # Vereine beide Datei-Spalten zu einer Spalte "file"
+        files_long = pd.concat([
+            self.combined_df[['cluster', 'file1']].rename(columns={'file1': 'file'}),
+            self.combined_df[['cluster', 'file2']].rename(columns={'file2': 'file'})
+        ])
 
-            unique_files = pd.concat([cluster_data['file1'], cluster_data['file2']]).unique()
-            file_count = len(unique_files)
+        # Gruppiere nach Cluster und zähle die eindeutigen Dateien
+        file_counts = files_long.groupby('cluster')['file'].nunique().reset_index().rename(
+            columns={'file': 'file_count'})
 
-            cluster_summaries.append({
-                'cluster': cluster,
-                'avg_cooccurrence': avg_cooccurrence,
-                'avg_distance': avg_distance,
-                'file_count': file_count
-            })
+        # Füge die aggregierten Werte zusammen
+        summary_df = cluster_agg.merge(file_counts, on='cluster')
 
+        self.plot_cluster_analysis()
+
+        return summary_df
+
+
+    def extract_features(self):
+        files_long = pd.concat([
+            self.combined_df[['cluster', 'file1', 'cooccurrence']].rename(columns={'file1': 'file'}),
+            self.combined_df[['cluster', 'file2', 'cooccurrence']].rename(columns={'file2': 'file'})
+        ])
+
+        # Gruppiere nach Datei und aggregiere:
+        # - cluster: Der Modus (häufigster Wert) wird als repräsentativer Cluster gewählt.
+        # - cooccurrence: Die Summe aller Co‑Occurrence-Werte.
+        features_df = files_long.groupby('file').agg(
+            cluster=('cluster', lambda x: x.mode()[0] if not x.mode().empty else None),
+            cooccurrence=('cooccurrence', 'sum')
+        ).reset_index()
+
+        return features_df
+
+    def plot_cluster_analysis(self):
+        """
+        Plots scatter plots for each cluster based on the scaled co-occurrence and distance values.
+        """
+        for cluster, cluster_data in self.combined_df.groupby('cluster'):
             plt.figure(figsize=(10, 8))
             plt.scatter(
                 cluster_data['cooccurrence_scaled'],
@@ -134,24 +185,3 @@ class ClusterAnalyser:
             plt.legend()
             self.plotter.save_plot(f'cluster_{cluster}_analysis.png')
             plt.close()
-
-        summary_df = pd.DataFrame(cluster_summaries)
-        #summary_df.to_csv('cluster_summary}.csv', index=False)
-
-        return summary_df
-
-    def extract_features(self):
-        features_list = []
-
-        unique_files = pd.concat([self.combined_df['file1'], self.combined_df['file2']]).unique()
-        for file in unique_files:
-            rows_with_file = self.combined_df[
-                (self.combined_df['file1'] == file) | (self.combined_df['file2'] == file)
-                ]
-            cluster = rows_with_file['cluster'].mode()[0]  # Assign the most common cluster
-            co_occurrence = rows_with_file['cooccurrence'].sum()
-
-            features_list.append({'file': file, 'cluster': cluster, 'cooccurrence': co_occurrence})
-
-        return pd.DataFrame(features_list)
-
