@@ -13,6 +13,7 @@ if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('pymongo').setLevel(logging.WARNING)
 
 # Configure logging
 logging.basicConfig(
@@ -83,13 +84,8 @@ async def process_project(project):
             commit_visualiser.commit_data, project_name, api_connection, all_file_features
         )
 
-        #cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await (
-        #    cooccurrence_analyser.run(recluster=recluster))
-        
-        cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await asyncio.to_thread(
-            lambda: asyncio.run(cooccurrence_analyser.run(recluster=recluster))
-        )
-
+        cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await (
+            cooccurrence_analyser.run(recluster=recluster))
 
         if cluster_combined_df is None or cluster_combined_df.empty:
             logging.error(f"Cluster combined dataframe is None or empty for project {project_name}!")
