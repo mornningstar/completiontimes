@@ -65,7 +65,7 @@ class FileCooccurrenceAnalyser:
             self.get_combined_data_matrix(combined_df)
 
             cluster_analyser = ClusterAnalyser(combined_df, self.plotter, self.api_connection)
-            cluster_analyser.find_optimal_clusters()
+            await cluster_analyser.find_optimal_clusters()
             combined_df, summary_df = await cluster_analyser.run_clustering_analysis()
 
             csv_path = os.path.join(output_dir, 'cluster_summary.csv')

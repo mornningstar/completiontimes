@@ -8,6 +8,7 @@ from kneed import KneeLocator
 from sklearn.cluster import KMeans
 
 from src.data_handling.database.async_database import AsyncDatabase
+from src.gpu_lock import gpu_lock
 
 
 class ClusterAnalyser:
@@ -22,7 +23,7 @@ class ClusterAnalyser:
 
         self.optimal_k = None
 
-    def find_optimal_clusters(self, max_k=10):
+    async def find_optimal_clusters(self, max_k=10):
         """
         Finds the optimal number of clusters for given data using the Elbow Method.
         :param max_k: Maximum number of clusters to try.
@@ -36,11 +37,12 @@ class ClusterAnalyser:
         data = self.numerical_df_for_clustering.to_numpy().astype('float32')
 
         if cp.cuda.is_available():
-            for k in k_range:
-                kmeans = cuKMeans(n_clusters=k, random_state=42)
-                kmeans.fit(data)
-                inertia.append(kmeans.inertia_)
-                models[k] = kmeans
+            async with gpu_lock:
+                for k in k_range:
+                    kmeans = cuKMeans(n_clusters=k, random_state=42)
+                    kmeans.fit(data)
+                    inertia.append(kmeans.inertia_)
+                    models[k] = kmeans
         else:
             for k in k_range:
                 kmeans = KMeans(n_clusters=k, random_state=42)
@@ -77,7 +79,11 @@ class ClusterAnalyser:
         self.logging.info("Fitting KMeans on numerical data...")
 
         data = self.numerical_df_for_clustering.to_numpy().astype('float32')
-        cluster_labels = self.kmeans_optimal.predict(data)
+        if cp.cuda.is_available():
+            async with gpu_lock:
+                cluster_labels = self.kmeans_optimal.predict(data)
+        else:
+            cluster_labels = self.kmeans_optimal.predict(data)
 
         self.combined_df['cluster'] = cluster_labels
         self.logging.info("Clustering completed.")
