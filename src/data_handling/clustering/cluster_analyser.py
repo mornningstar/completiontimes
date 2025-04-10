@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import gc
 
 import cupy as cp
 import pandas as pd
@@ -43,6 +44,10 @@ class ClusterAnalyser:
                     kmeans.fit(data)
                     inertia.append(kmeans.inertia_)
                     models[k] = kmeans
+
+            self.logging.debug("Freeing GPU memory after cuKMeans fitting.")
+            cp.get_default_memory_pool().free_all_blocks()
+            gc.collect()
         else:
             for k in k_range:
                 kmeans = KMeans(n_clusters=k, random_state=42)

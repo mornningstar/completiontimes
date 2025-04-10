@@ -1,5 +1,6 @@
 import logging
 import os
+import gc
 import cupy as cp
 from collections import defaultdict
 
@@ -118,10 +119,17 @@ class FileCooccurrenceAnalyser:
         if cp.cuda.is_available():
             self.logging.info("Using CUDA for building co-occurrence matrix.")
 
+            cp.get_default_memory_pool().free_all_blocks()
+            gc.collect()
+
             one_hot_cp = cp.asarray(one_hot.values, dtype=cp.float32)
             one_hot_sparse = cupy_csr_matrix(one_hot_cp)
             cooccurrence_sparse = one_hot_sparse.T.dot(one_hot_sparse)
             cooccurrence_matrix = cp.asnumpy(cooccurrence_sparse.toarray())
+
+            self.logging.info("Freeing GPU memory after sparse matrix calculation.")
+            cp.get_default_memory_pool().free_all_blocks()
+            gc.collect()
         else:
             self.logging.info("No CUDA available for building co-occurrence matrix.")
 
