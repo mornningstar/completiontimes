@@ -235,3 +235,14 @@ class Plotter:
         plt.legend()
         self.save_plot(f"{label}_{target}_refit.png")
         plt.close()
+
+    def plot_completion_donut(self, completed, total):
+        remaining = total - completed
+        labels = ['Completed', 'Incomplete']
+        sizes = [completed, remaining]
+
+        fig, ax = plt.subplots()
+        ax.pie(sizes, labels=labels, startangle=90, autopct='%1.1f%%', wedgeprops={'width': 0.3})
+        ax.set_title('Completed Files')
+        self.save_plot(f"completed_files_donut.png")
+        plt.close()

@@ -6,6 +6,7 @@ from config.projects import PROJECTS
 from src.data_handling.database.api_connection_async import APIConnectionAsync
 from src.data_handling.clustering.file_cooccurence_analyser import FileCooccurrenceAnalyser
 from src.data_handling.features.file_feature_engineering import FileFeatureEngineer
+from src.predictions.file_model_trainer import FileModelTrainer
 from src.visualisations.commit_visualiser import CommitVisualiser
 from src.visualisations.file_visualiser import FileVisualiser
 
@@ -69,68 +70,91 @@ async def process_project(project):
 
     api_connection = await APIConnectionAsync.create(project_name)
 
-    try:
-        logging.info(f"Starting processing for project: {project_name}")
-        await api_connection.populate_db()
+    task = "REGRESSION" # or "OLD"
 
-        logging.info(f"Running feature engineering for project: {project_name}")
-        feature_engineer = FileFeatureEngineer(api_connection, project_name)
-        all_file_features = await feature_engineer.run()
+    if task == "REGRESSION":
+        try:
+            logging.info(f"Starting processing for project: {project_name}")
+            await api_connection.populate_db()
 
-        commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
-        await commit_visualiser.get_commits()
+            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.05, consecutive_days=14)
+            file_features = await feature_engineer.run()
 
-        cooccurrence_analyser = FileCooccurrenceAnalyser(
-            commit_visualiser.commit_data, project_name, api_connection, all_file_features
-        )
+            commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
+            await commit_visualiser.get_commits()
 
-        cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await (
-            cooccurrence_analyser.run(recluster=recluster))
+            file_model_trainer = FileModelTrainer(project_name, models[0])
+            file_model_trainer.train_and_evaluate(file_features)
 
-        if cluster_combined_df is None or cluster_combined_df.empty:
-            logging.error(f"Cluster combined dataframe is None or empty for project {project_name}!")
-        else:
-            logging.info(f"Cluster combined dataframe preview:\n{cluster_combined_df.head()}")
+        except Exception:
+            logging.exception('Error while processing project {}'.format(project_name))
+        finally:
+            logging.info('Project {} finished!'.format(project_name))
+            await api_connection.close_session()
+    else:
 
-        if replot:
-            logging.info(f"Replotting enabled for project: {project_name}")
-            cooccurrence_analyser.plot(
-                cooccurrence_df=cooccurrence_df,
-                cooccurrence_categorized_df=cooccurrence_categorized_df,
-                proximity_df=proximity_df,
-                combined_df=cluster_combined_df,
-                plot_options=plot_options
+        try:
+            logging.info(f"Starting processing for project: {project_name}")
+            await api_connection.populate_db()
+
+            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.1, consecutive_days=14)
+
+            all_file_features = await feature_engineer.run()
+
+            commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
+            await commit_visualiser.get_commits()
+
+            cooccurrence_analyser = FileCooccurrenceAnalyser(
+                commit_visualiser.commit_data, project_name, api_connection, all_file_features
             )
 
-        tasks = []
-        for target, config in file_modeling_tasks.items():
-            cluster_enabled = config.get('cluster', False)
-            files = config.get('files', [])
+            cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await (
+                cooccurrence_analyser.run(recluster=recluster))
 
-            tasks.extend([
-                process_file_visualiser(
-                    api_connection, project_name, file_path, commit_visualiser, models, target,
-                    all_file_features, project
-                ) for file_path in files
-            ])
+            if cluster_combined_df is None or cluster_combined_df.empty:
+                logging.error(f"Cluster combined dataframe is None or empty for project {project_name}!")
+            else:
+                logging.info(f"Cluster combined dataframe preview:\n{cluster_combined_df.head()}")
 
-            if cluster_enabled and cluster_combined_df is not None:
-                logging.info(f"I am inside the task. Clusters found: {cluster_combined_df['cluster'].unique()}")
-                tasks.extend([process_file_visualiser(
-                    api_connection, project_name, None, commit_visualiser, models, target,
-                    all_file_features, project, cluster_combined_df=cluster_combined_df
-                )]
+            if replot:
+                logging.info(f"Replotting enabled for project: {project_name}")
+                cooccurrence_analyser.plot(
+                    cooccurrence_df=cooccurrence_df,
+                    cooccurrence_categorized_df=cooccurrence_categorized_df,
+                    proximity_df=proximity_df,
+                    combined_df=cluster_combined_df,
+                    plot_options=plot_options
                 )
 
+            tasks = []
+            for target, config in file_modeling_tasks.items():
+                cluster_enabled = config.get('cluster', False)
+                files = config.get('files', [])
 
-        await asyncio.gather(*tasks)
+                tasks.extend([
+                    process_file_visualiser(
+                        api_connection, project_name, file_path, commit_visualiser, models, target,
+                        all_file_features, project
+                    ) for file_path in files
+                ])
 
-    except Exception:
-        logging.exception('Error while processing project {}'.format(project_name))
+                if cluster_enabled and cluster_combined_df is not None:
+                    logging.info(f"I am inside the task. Clusters found: {cluster_combined_df['cluster'].unique()}")
+                    tasks.extend([process_file_visualiser(
+                        api_connection, project_name, None, commit_visualiser, models, target,
+                        all_file_features, project, cluster_combined_df=cluster_combined_df
+                    )]
+                    )
 
-    finally:
-        logging.info('Project {} finished!'.format(project_name))
-        await api_connection.close_session()
+
+            await asyncio.gather(*tasks)
+
+        except Exception:
+            logging.exception('Error while processing project {}'.format(project_name))
+
+        finally:
+            logging.info('Project {} finished!'.format(project_name))
+            await api_connection.close_session()
 
 
 async def main():

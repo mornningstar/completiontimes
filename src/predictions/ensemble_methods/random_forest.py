@@ -1,8 +1,9 @@
 import logging
+import pprint
+import time
 
 import numpy as np
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.model_selection import GridSearchCV
 
@@ -10,7 +11,7 @@ from src.predictions.base_model import BaseModel
 
 
 class RandomForestModel(BaseModel):
-    def __init__(self, n_estimators, max_depth, random_state=42):
+    def __init__(self, n_estimators=100, max_depth=None, random_state=42, auto_tune=False):
         super().__init__()
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -20,51 +21,72 @@ class RandomForestModel(BaseModel):
 
         self.model = RandomForestRegressor(n_estimators=self.n_estimators, max_depth=self.max_depth,
                                             random_state=random_state)
+        self.auto_tune_flag = auto_tune
 
     def auto_tune(self, x_train, y_train, param_grid=None, cv=5, scoring='neg_mean_squared_error', n_jobs=-1):
         self.logger.info("Starting hyperparameter tuning...")
 
         if param_grid is None:
+            # param_grid = {
+            #     'n_estimators': [50, 100, 200],
+            #     'max_depth': [None, 10, 20, 30],
+            #     'min_samples_split': [2, 5, 10],
+            #     'min_samples_leaf': [1, 2, 4],
+            #     'max_features': [None, 'sqrt', 'log2']
+            # }
             param_grid = {
                 'n_estimators': [50, 100, 200],
-                'max_depth': [None, 10, 20, 30],
+                'max_depth': [5, 10, 15, 20, 50, None],
                 'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
-                'max_features': ['auto', 'sqrt', 'log2']
+                'min_samples_leaf': [1, 2, 4, 8],
+                'max_features': ['sqrt', 'log2', 0.3, 0.7]
             }
 
+        self.logger.debug("Tuning with parameter grid:")
+        self.logger.debug(pprint.pformat(param_grid))
+
+        start_time = time.time()
+
         grid_search = GridSearchCV(
-            estimator=RandomForestRegressor(random_state=self.default_params['random_state']),
+            estimator=RandomForestRegressor(random_state=self.model.random_state),
             param_grid=param_grid,
             scoring=scoring,
             cv=cv,
             n_jobs=n_jobs
         )
 
-        scaled_x_train = self.scale_data(x_train)
-        grid_search.fit(scaled_x_train, y_train)
+        grid_search.fit(x_train, y_train)
+
+        elapsed_time = time.time() - start_time
 
         # Update the model with the best parameters
         self.model = grid_search.best_estimator_
-        self.logger.info(f"Best parameters: {grid_search.best_params_}")
-        self.logger.info(f"Best score: {grid_search.best_score_}")
+
+        self.logger.info(f"Best score: {grid_search.best_score_:.4f} ({scoring})")
+        self.logger.info(f"Best parameters:\n{pprint.pformat(grid_search.best_params_)}")
+        self.logger.info(f"Tuning finished in {elapsed_time:.2f} seconds")
 
         return grid_search.best_params_
 
     def train(self, x_train, y_train):
         self.logger.info("Training RandomForest model")
-        scaled_x_train = self.scale_data(x_train)
-        self.model.fit(scaled_x_train, y_train)
-        self.logger.info("Training completed.")
+
+        if self.auto_tune_flag:
+            self.logger.info("Tuning hyperparameters with GridSearchCV...")
+            self.auto_tune(x_train, y_train)
+        else:
+            self.model.fit(x_train, y_train)
+            self.logger.info("Training completed.")
 
     def evaluate(self, x_test, y_test):
         self.logger.info("Evaluating RandomForest model")
-        scaled_x_test = self.scale_data(x_test)
-        predictions = self.model.predict(scaled_x_test)
+        predictions = self.model.predict(x_test)
+        predictions = np.expm1(predictions)
 
         mse = mean_squared_error(y_true=y_test, y_pred=predictions)
         mae = mean_absolute_error(y_true=y_test, y_pred=predictions)
         rmse = np.sqrt(mse)
+        mape = np.mean(np.abs((y_test - predictions) / y_test)) * 100
 
-        return predictions, mse, mae, rmse
+        return predictions, mse, mae, rmse, mape
 

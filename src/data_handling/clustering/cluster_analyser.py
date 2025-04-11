@@ -13,6 +13,8 @@ from src.gpu_lock import gpu_lock
 
 
 class ClusterAnalyser:
+    MAX_ROWS = 100_000
+
     def __init__(self, combined_df, plotter, api_connection):
         self.kmeans_optimal = None
         self.logging = logging.getLogger(self.__class__.__name__)
@@ -35,7 +37,15 @@ class ClusterAnalyser:
         k_range = range(1, max_k + 1)
         models = {}
 
-        data = self.numerical_df_for_clustering.to_numpy().astype('float32')
+        if self.numerical_df_for_clustering.shape[0] > ClusterAnalyser.MAX_ROWS:
+            self.logging.warning(
+                f"Too many rows ({self.numerical_df_for_clustering.shape[0]}). Downsampling to {ClusterAnalyser.MAX_ROWS}.")
+            df_for_clustering = self.numerical_df_for_clustering.sample(n=ClusterAnalyser.MAX_ROWS, random_state=42)
+        else:
+            df_for_clustering = self.numerical_df_for_clustering
+
+        data = df_for_clustering.to_numpy().astype("float32")
+        #data = self.numerical_df_for_clustering.to_numpy().astype('float32')
 
         if cp.cuda.is_available():
             async with gpu_lock:
