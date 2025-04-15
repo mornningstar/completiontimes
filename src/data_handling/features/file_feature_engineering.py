@@ -94,6 +94,10 @@ class FileFeatureEngineer:
         df.replace([np.inf, -np.inf], 0, inplace=True)
         return df
 
+    def count_recent_commits(self, group, window_days=30):
+        dates = group["date"]
+        return dates.apply(lambda d: (dates < d) & (dates >= d - pd.Timedelta(days=window_days))).sum(axis=0)
+
     def calculate_metrics(self, file_df, window=7):
         """
         Calculate additional metrics for files.
@@ -113,9 +117,6 @@ class FileFeatureEngineer:
 
         return file_df
 
-    def count_recent_commits(self, group, window_days=30):
-        dates = group["date"]
-        return dates.apply(lambda d: (dates < d) & (dates >= d - pd.Timedelta(days=window_days))).sum(axis=0)
 
     def add_completion_labels(self, df, threshold, consecutive_days, idle_days_cutoff=180):
         """
@@ -209,6 +210,12 @@ class FileFeatureEngineer:
 
         file_df = await self.fetch_all_files()
         file_features = self.calculate_metrics(file_df)
+
+        feature_cols = [col for col in file_features.select_dtypes(include="number").columns
+                        if col not in ["days_until_completion", "size", "cumulative_size"]]
+        target_series = file_features["days_until_completion"]
+        self.plotter.plot_feature_correlations(file_features[feature_cols], target_series)
+
         await self.save_features_to_db(file_features)
 
         self.logging.info(f"Finished feature engineering for project: {self.project_name}")

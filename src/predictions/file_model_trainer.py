@@ -66,6 +66,9 @@ class FileModelTrainer:
         self.model_plotter.plot_residuals(y_test, y_pred)
         self.model_plotter.plot_errors_vs_actual(y_test, y_pred)
 
+        self.model_plotter.plot_predictions_vs_actual(y_test, y_pred)
+        self.model_plotter.plot_top_errors(y_test, y_pred, n=10)
+
         return y_pred, mse, mae, rmse
 
     def train_and_evaluate(self, file_data_df):
@@ -78,7 +81,14 @@ class FileModelTrainer:
         x_test = test_df[feature_cols].values
         y_test_log = np.log1p(test_df["days_until_completion"].values)
 
+        #Training
         self.train(x_train, y_train_log)
+
+        importances = self.model.get_feature_importances()
+        if importances is not None:
+            self.model_plotter.plot_model_feature_importance(feature_cols, importances)
+
+        #Evaluation
         y_pred, mse, mae, rmse = self.evaluate(x_test, y_test_log, test_df)
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")

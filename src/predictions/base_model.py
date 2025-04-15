@@ -41,3 +41,10 @@ class BaseModel:
         except Exception as e:
             self.logger.error(f"Failed to load model: {e}")
             raise
+
+    def get_feature_importances(self):
+        if hasattr(self.model, "feature_importances_"):
+            return self.model.feature_importances_
+        else:
+            self.logger.warning("This model does not support feature importances.")
+            return None

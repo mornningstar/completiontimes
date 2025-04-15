@@ -34,19 +34,3 @@ class Plotter:
         """Helper function to save the current plot to the project directory."""
         plt.savefig(os.path.join(self.images_dir, filename))
         plt.close()
-
-    # def plot(self, df, title, ylabel):
-    #     """
-    #     Helper function to plot the given dataframe.
-    #     :param df: dataframe to plot
-    #     :param title: title of the plot
-    #     :param ylabel: Label for the y-axis
-    #     :return:
-    #     """
-    #     self._init_plot(title, xlabel="Time", ylabel=ylabel)
-    #
-    #     plt.plot(df.index, df.iloc[:, 0], marker='o', linestyle='-')
-    #
-    #     self.save_plot("plot.png")
-
-
