@@ -7,15 +7,13 @@ from matplotlib import pyplot as plt
 from src.visualisations.plotting import Plotter
 
 
-class ModelPlotter:
+class ModelPlotter(Plotter):
     def __init__(self, project_name=None, images_dir='images'):
+        super().__init__(project_name, images_dir)
         self.logging = logging.getLogger(self.__class__.__name__)
+
         self.images_dir = images_dir
         self.project_name = project_name
-
-        self.plotter = Plotter(project_name=self.project_name)
-
-        os.makedirs(images_dir, exist_ok=True)
 
     def plot_residuals(self, y_true, y_pred):
         residuals = y_true - y_pred
@@ -35,18 +33,27 @@ class ModelPlotter:
         plt.ylabel("Errors (y_true - y_pred)")
         plt.tight_layout()
 
-        self.plotter.save_plot("residuals_model.png")
+        self.save_plot("residuals_model.png")
 
     def plot_errors_vs_actual(self, y_true, y_pred):
         errors = y_true - y_pred
 
-        plt.figure(figsize=(12, 6))
+        self._init_plot(title="Errors vs. Actual Days Until Completion", xlabel="Actual Days Until Completion",
+                        ylabel="Errors (y_true - y_pred)")
+
         plt.scatter(y_true, errors, alpha=0.7)
         plt.axhline(0, color="red", linestyle="--")
-        plt.title("Errors vs. Actual Days Until Completion")
-        plt.xlabel("Actual Days Until Completion (y_true)")
-        plt.ylabel("Errors (y_true - y_pred)")
-        plt.grid(True)
         plt.tight_layout()
 
-        self.plotter.save_plot("errors_vs_actual_model.png")
+        self.save_plot("errors_vs_actual_model.png")
+
+    def plot_completion_donut(self, completed, total):
+        remaining = total - completed
+        labels = ['Completed', 'Incomplete']
+        sizes = [completed, remaining]
+
+        fig, ax = plt.subplots()
+        ax.pie(sizes, labels=labels, startangle=90, autopct='%1.1f%%', wedgeprops={'width': 0.3})
+        ax.set_title('Completed Files')
+
+        self.save_plot(f"completed_files_donut.png")

@@ -45,7 +45,7 @@ class RepoDataHandler:
         self.modeling_tasks = modeling_tasks
 
         # Currently only used for other commit stats
-        self.plotter = Plotter(project_name=self.api_connection.full_commit_info_collection)
+        #self.plotter = Plotter(project_name=self.api_connection.full_commit_info_collection)
 
         self.commit_data = None
         self.commits_df = None

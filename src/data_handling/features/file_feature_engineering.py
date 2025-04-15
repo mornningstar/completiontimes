@@ -4,17 +4,18 @@ import numpy as np
 import pandas as pd
 
 from src.data_handling.database.async_database import AsyncDatabase
-from src.visualisations.plotting import Plotter
+from src.visualisations.model_plotting import ModelPlotter
+
 
 class FileFeatureEngineer:
 
-    def __init__(self, api_connection, project_name, threshold, consecutive_days):
+    def __init__(self, api_connection, project_name, threshold, consecutive_days, images_dir):
         self.api_connection = api_connection
         self.project_name = project_name
         self.threshold = threshold
         self.consecutive_days = consecutive_days
 
-        self.plotter = Plotter(self.project_name)
+        self.plotter = ModelPlotter(self.project_name, images_dir=images_dir)
         self.logging = logging.getLogger(self.__class__.__name__)
 
     async def fetch_all_files(self):
@@ -35,62 +36,77 @@ class FileFeatureEngineer:
 
         return pd.DataFrame(rows).sort_values('date')
 
-    def calculate_metrics(self, file_df, window=7):
-        """
-                Calculate rolling and cumulative metrics for files.
-        """
-        file_df["size"] = pd.to_numeric(file_df["size"], errors="coerce")
+    def _add_file_extension_features(self, df):
+        df["file_extension"] = df["path"].str.extract(r'\.([a-zA-Z0-9]+)$')[0].fillna("unknown")
+        ext_counts = df["file_extension"].value_counts()
+        top_exts = ext_counts[(ext_counts >= 10) | (ext_counts.rank(method="min") <= 10)].index
+        df["file_extension"] = df["file_extension"].apply(lambda x: x if x in top_exts else "other")
+        dummies = pd.get_dummies(df["file_extension"], prefix="ext")
+        return pd.concat([df, dummies], axis=1)
 
-        file_df.dropna(subset=["size"], inplace=True)  # Drop rows where size is missing
+    def _add_size_features(self, df, window):
+        df["size"] = pd.to_numeric(df["size"], errors="coerce")
+        df.dropna(subset=["size"], inplace=True)
+        df["size_diff"] = df.groupby("path")["size"].diff().fillna(0).abs()
+        df.sort_values(["path", "date"], inplace=True)
 
-        file_df.sort_values(["path", "date"], inplace=True)
+        roll = df.groupby("path")["size"].rolling(window=window)
+        for stat in ["mean", "std", "max", "min", "median", "var"]:
+            df[f"rolling_{window}_{stat}"] = getattr(roll, stat)().reset_index(level=0, drop=True)
 
-        file_df["size_diff"] = file_df.groupby("path")["size"].diff().fillna(0).abs()
-
-        roll = file_df.groupby("path")["size"].rolling(window=window)
-
-        file_df[f"rolling_{window}_mean"] = roll.mean().reset_index(level=0, drop=True)
-        file_df[f"rolling_{window}_std"] = roll.std().reset_index(level=0, drop=True)
-        file_df[f"rolling_{window}_max"] = roll.max().reset_index(level=0, drop=True)
-        file_df[f"rolling_{window}_min"] = roll.min().reset_index(level=0, drop=True)
-        file_df[f"rolling_{window}_median"] = roll.median().reset_index(level=0, drop=True)
-        file_df[f"rolling_{window}_var"] = roll.var().reset_index(level=0, drop=True)
-
-        file_df[f"ema_{window}"] = (
-            file_df.groupby("path")["size"]
+        df[f"ema_{window}"] = (
+            df.groupby("path")["size"]
             .transform(lambda x: x.ewm(span=window, adjust=False).mean())
         )
 
-        # Cumulative Features
-        file_df["cumulative_size"] = file_df.groupby("path")["size"].cumsum()
-        file_df["cumulative_mean"] = file_df.groupby("path")["size"].expanding().mean().reset_index(level=0, drop=True)
-        file_df["cumulative_std"] = file_df.groupby("path")["size"].expanding().std().reset_index(level=0, drop=True)
+        df["cumulative_size"] = df.groupby("path")["size"].cumsum()
+        df["cumulative_mean"] = df.groupby("path")["size"].expanding().mean().reset_index(level=0, drop=True)
+        df["cumulative_std"] = df.groupby("path")["size"].expanding().std().reset_index(level=0, drop=True)
 
-        # Lag Features
+        return df
+
+    def _add_lag_features(self, df, window):
         for lag in range(1, window + 1):
-            file_df[f"lag_{lag}_size"] = file_df.groupby("path")["size"].shift(lag)
+            df[f"lag_{lag}_size"] = df.groupby("path")["size"].shift(lag)
+        return df
 
-        # Derived Features
-        file_df["absolute_change"] = file_df.groupby("path")["size"].diff().abs()
-        file_df["percentage_change"] = (
-            file_df.groupby("path")["size"]
+    def _add_derived_features(self, df):
+        df["absolute_change"] = df.groupby("path")["size"].diff().abs()
+        df["percentage_change"] = (
+            df.groupby("path")["size"]
             .pct_change()
             .replace([np.inf, -np.inf], np.nan)
+            .round(4)
         )
-        file_df["percentage_change"] = file_df["percentage_change"].round(4)
+        df["rolling_7_mean_to_std_ratio"] = (
+                df["rolling_7_mean"] / df["rolling_7_std"]
+        ).replace([np.inf, -np.inf], 0)
 
-        file_df[f"rolling_{window}_mean_to_std_ratio"] = (
-                file_df[f"rolling_{window}_mean"] / file_df[f"rolling_{window}_std"]
-        )
+        return df
 
-        file_df["days_since_last_commit"] = file_df.groupby("path")["date"].diff().dt.days.fillna(0)
-        file_df["commits_last_30d"] = file_df.groupby("path").apply(lambda g: self.count_recent_commits(g)).reset_index(level=0,
-                                                                                                         drop=True)
+    def _add_commit_activity_features(self, df):
+        df["days_since_last_commit"] = df.groupby("path")["date"].diff().dt.days.fillna(0)
+        df["commits_last_30d"] = df.groupby("path").apply(self.count_recent_commits).reset_index(level=0, drop=True)
 
-        file_df['last_3_mean'] = file_df[["lag_1_size", "lag_2_size", "lag_3_size"]].mean(axis=1)
-        file_df['last_3_slope'] = file_df["lag_1_size"] - file_df["lag_3_size"]
+        df["last_3_mean"] = df[["lag_1_size", "lag_2_size", "lag_3_size"]].mean(axis=1)
+        df["last_3_slope"] = df["lag_1_size"] - df["lag_3_size"]
 
-        file_df = file_df.replace([np.inf, -np.inf], 0)
+        df.replace([np.inf, -np.inf], 0, inplace=True)
+        return df
+
+    def calculate_metrics(self, file_df, window=7):
+        """
+        Calculate additional metrics for files.
+        :param file_df: the file dataset with its commits per file
+        :param window: the defined window for lag and ema features
+        :return:
+        """
+        # Use File Extensions as Features
+        file_df = self._add_file_extension_features(file_df)
+        file_df = self._add_size_features(file_df, window)
+        file_df = self._add_lag_features(file_df, window)
+        file_df = self._add_derived_features(file_df)
+        file_df = self._add_commit_activity_features(file_df)
 
         file_df = self.add_completion_labels(file_df, self.threshold, self.consecutive_days)
         file_df = self.add_days_until_completion(file_df)

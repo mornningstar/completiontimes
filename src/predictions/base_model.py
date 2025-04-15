@@ -22,6 +22,11 @@ class BaseModel:
     def evaluate(self, x_test, y_test):
         raise NotImplementedError("Evaluate method must be implemented.")
 
+    def predict(self, x):
+        if self.model is None:
+            raise ValueError("Model is not trained yet.")
+        return self.model.predict(x)
+
     def save_model(self, filepath):
         try:
             joblib.dump(self.model, filepath)

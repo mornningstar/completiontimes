@@ -1,5 +1,7 @@
 import asyncio
+import datetime
 import logging
+import os
 import platform
 
 from config.projects import PROJECTS
@@ -74,25 +76,37 @@ async def process_project(project):
 
     if task == "REGRESSION":
         try:
+            timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            run_output_dir = os.path.join(project_name, "runs", timestamp)
+            os.makedirs(run_output_dir, exist_ok=True)
+
+            images_dir = os.path.join(run_output_dir, "images")
+            logging.info("images_dir: {}".format(images_dir))
+            models_dir = os.path.join(run_output_dir, "models")
+
             logging.info(f"Starting processing for project: {project_name}")
             await api_connection.populate_db()
 
-            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.05, consecutive_days=14)
+            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.05, consecutive_days=14,
+                                                   images_dir=images_dir)
             file_features = await feature_engineer.run()
 
             commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
             await commit_visualiser.get_commits()
 
-            file_model_trainer = FileModelTrainer(project_name, models[0])
+            file_model_trainer = FileModelTrainer(project_name, models[0], images_dir=images_dir, output_dir=models_dir)
             file_model_trainer.train_and_evaluate(file_features)
+
+            result = file_model_trainer.predict_unlabeled_files(file_features)
+            print(result.head(10))
 
         except Exception:
             logging.exception('Error while processing project {}'.format(project_name))
         finally:
             logging.info('Project {} finished!'.format(project_name))
             await api_connection.close_session()
-    else:
 
+    else:
         try:
             logging.info(f"Starting processing for project: {project_name}")
             await api_connection.populate_db()

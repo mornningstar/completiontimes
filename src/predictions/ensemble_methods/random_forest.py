@@ -80,13 +80,7 @@ class RandomForestModel(BaseModel):
 
     def evaluate(self, x_test, y_test):
         self.logger.info("Evaluating RandomForest model")
-        predictions = self.model.predict(x_test)
-        predictions = np.expm1(predictions)
+        y_pred = self.model.predict(x_test)
 
-        mse = mean_squared_error(y_true=y_test, y_pred=predictions)
-        mae = mean_absolute_error(y_true=y_test, y_pred=predictions)
-        rmse = np.sqrt(mse)
-        mape = np.mean(np.abs((y_test - predictions) / y_test)) * 100
-
-        return predictions, mse, mae, rmse, mape
+        return y_pred
 
