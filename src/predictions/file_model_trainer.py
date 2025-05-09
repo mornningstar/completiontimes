@@ -158,3 +158,4 @@ class FileModelTrainer:
         explain = ExplainabilityAnalyzer(model=self.model, feature_names=feature_cols, model_plotter=self.model_plotter)
         explain.analyze_top_errors(errors_df)
         explain.analyze_error_sources(errors_df)
+        explain.analyze_shap_by_committer(errors_df)

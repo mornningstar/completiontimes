@@ -25,6 +25,22 @@ class ExplainabilityAnalyzer:
         self.model_plotter.plot_shap_summary(shap_values, X_top, self.feature_names)
         self.model_plotter.plot_shap_bar(shap_values[0], self.feature_names)
 
+    def analyze_shap_by_committer(self, errors_df, top_n_committers=5):
+        top_committers = errors_df["committer_grouped"].value_counts().head(top_n_committers).index
+        explainer = TreeExplainer(self.model.model)
+
+        for committer in top_committers:
+            subset = errors_df[errors_df["committer_grouped"] == committer]
+            if subset.empty:
+                continue
+
+            X = subset[self.feature_names].values
+            shap_values = explainer.shap_values(X)
+
+            title_suffix = f"Committer: {committer}"
+            self.model_plotter.plot_shap_summary(shap_values, X, self.feature_names, title=title_suffix)
+            self.model_plotter.plot_shap_bar(shap_values[0], self.feature_names, title=title_suffix + " (bar)")
+
 
     def analyze_error_sources(self, errors_df, top_n=15):
         errors_df["extension"] = errors_df["path"].str.extract(r"\.([a-zA-Z0-9]+)$")[0].fillna("no_ext")
