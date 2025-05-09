@@ -1,9 +1,6 @@
 import logging
 import os
-from itertools import cycle
 
-import pandas as pd
-import seaborn as sns
 from matplotlib import pyplot as plt
 
 
@@ -29,6 +26,17 @@ class Plotter:
         if ylabel: plt.ylabel(ylabel)
 
         plt.grid(True)
+
+    def plot_bar(self, series, title, xlabel, ylabel, rotation=45, filename=None):
+        self._init_plot(title=title, xlabel=xlabel, ylabel=ylabel, figsize=(10, 6))
+
+        series.plot(kind='bar', rot=rotation)
+        plt.tight_layout()
+
+        if filename is None:
+            filename = f"{title.lower().replace(' ', '_')}.png"
+
+        self.save_plot(filename)
 
     def save_plot(self, filename):
         """Helper function to save the current plot to the project directory."""

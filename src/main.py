@@ -94,11 +94,12 @@ async def process_project(project):
             commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
             await commit_visualiser.get_commits()
 
-            file_model_trainer = FileModelTrainer(project_name, models[0], images_dir=images_dir, output_dir=models_dir)
-            file_model_trainer.train_and_evaluate(file_features)
-
-            result = file_model_trainer.predict_unlabeled_files(file_features)
-            print(result.head(10))
+            for model in models:
+                logging.info(f"Using {model.__class__.__name__}")
+                file_model_trainer = FileModelTrainer(project_name, model, images_dir=images_dir, output_dir=models_dir)
+                file_model_trainer.train_and_evaluate(file_features)
+                result = file_model_trainer.predict_unlabeled_files(file_features)
+                print(result.head(10))
 
         except Exception:
             logging.exception('Error while processing project {}'.format(project_name))
@@ -111,7 +112,8 @@ async def process_project(project):
             logging.info(f"Starting processing for project: {project_name}")
             await api_connection.populate_db()
 
-            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.1, consecutive_days=14)
+            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.1, consecutive_days=14,
+                                                   images_dir="images")
 
             all_file_features = await feature_engineer.run()
 

@@ -229,6 +229,12 @@ class APIConnectionAsync:
                 if update and sha in existing_shas:  # Skip already stored commits in update mode
                     continue
 
+                committer = (
+                        commit.get("committer", {}).get("login")
+                        or commit.get("commit", {}).get("committer", {}).get("name")
+                        or "unknown"
+                )
+                committer = (commit.get("committer", {}) or {}).get("login") or commit.get("commit", {}).get("committer", {}).get("name", "unknown")
                 commit_date = commit['commit']['author']['date']
                 size_or_status = await self.get_file_size_at_commit(file_path, sha)
 
@@ -272,7 +278,8 @@ class APIConnectionAsync:
                 full_commit_history.append({
                     'sha': sha,
                     'date': commit_date,
-                    'size': size_or_status
+                    'size': size_or_status,
+                    'committer': committer
                 })
 
             # Get the next page URL from headers if available

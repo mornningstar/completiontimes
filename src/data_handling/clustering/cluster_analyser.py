@@ -10,6 +10,7 @@ from sklearn.cluster import KMeans
 
 from src.data_handling.database.async_database import AsyncDatabase
 from src.gpu_lock import gpu_lock
+from src.visualisations.predictions_plotting import PredictionsPlotter
 
 
 class ClusterAnalyser:
@@ -136,7 +137,8 @@ class ClusterAnalyser:
 
         summary_df = self.analyse_clusters()
 
-        self.plotter.plot_clusters(self.combined_df)
+        predictions_plotter = PredictionsPlotter()
+        predictions_plotter.plot_clusters(self.combined_df)
 
         self.logging.info("Clustering analysis completed.")
         return self.combined_df, summary_df

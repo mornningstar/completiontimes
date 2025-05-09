@@ -1,16 +1,20 @@
 import logging
-import os
 
 import pandas as pd
 import seaborn as sns
+import shap
 from matplotlib import pyplot as plt
 
 from src.visualisations.plotting import Plotter
 
 
 class ModelPlotter(Plotter):
-    def __init__(self, project_name=None, images_dir='images'):
-        super().__init__(project_name, images_dir)
+    def __init__(self, project_name, model=None, images_dir='images'):
+        if model:
+            super().__init__(project_name, f"{images_dir}/{model.__name__}")
+        else:
+            super().__init__(project_name, images_dir)
+
         self.logging = logging.getLogger(self.__class__.__name__)
 
     def plot_residuals(self, y_true, y_pred):
@@ -31,7 +35,7 @@ class ModelPlotter(Plotter):
         plt.ylabel("Errors (y_true - y_pred)")
         plt.tight_layout()
 
-        self.save_plot("residuals_model.png")
+        self.save_plot(f"residuals.png")
 
     def plot_errors_vs_actual(self, y_true, y_pred):
         errors = y_true - y_pred
@@ -43,7 +47,7 @@ class ModelPlotter(Plotter):
         plt.axhline(0, color="red", linestyle="--")
         plt.tight_layout()
 
-        self.save_plot("errors_vs_actual_model.png")
+        self.save_plot("errors_vs_actual.png")
 
     def plot_completion_donut(self, completed, total):
         remaining = total - completed
@@ -67,7 +71,7 @@ class ModelPlotter(Plotter):
 
         plt.legend()
         plt.tight_layout()
-        self.save_plot("predicted_vs_actual_model.png")
+        self.save_plot("predicted_vs_actual.png")
 
     def plot_top_errors(self, y_true, y_pred, n=10):
         errors = abs(y_true - y_pred)
@@ -111,7 +115,22 @@ class ModelPlotter(Plotter):
         sorted_names = [feature_names[i] for i in sorted_idx]
         sorted_values = importances[sorted_idx]
 
-        self._init_plot(title="Top Feature Importances (Model", xlabel="Importance")
+        self._init_plot(title="Top Feature Importances (Model)", xlabel="Importance")
         sns.barplot(x=sorted_values, y=sorted_names)
-        #plt.tight_layout()
-        self.save_plot("model_feature_importance.png")
+        self.save_plot("feature_importance.png")
+
+    def plot_error_types_pie(self, error_types):
+        self._init_plot(title="Distribution of Error Types", xlabel="Error Type", ylabel="Amount", figsize=(6,6))
+        counts = error_types.value_counts()
+        plt.pie(counts, labels=counts.index, autopct="%1.1f%%", startangle=140)
+        self.save_plot("error_types_pie.png")
+
+    def plot_shap_summary(self, shap_values, X, feature_names):
+        shap.summary_plot(shap_values, features=X, feature_names=feature_names, show=False)
+        plt.tight_layout()
+        self.save_plot("top_errors_shap_summary.png")
+
+    def plot_shap_bar(self, shap_values_row, feature_names):
+        shap.bar_plot(shap_values_row, feature_names=feature_names, show=False)
+        plt.tight_layout()
+        self.save_plot("top1_shap_bar.png")

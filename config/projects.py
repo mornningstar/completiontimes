@@ -1,11 +1,13 @@
+from src.predictions.ensemble_methods.gradient_boosting import GradientBoosting
 from src.predictions.ensemble_methods.random_forest import RandomForestModel
+from src.predictions.deep_learning.mlp_model import MLPModel
+from src.predictions.machine_learning.lstmmodel import LSTMModel
 from src.predictions.prophet_model import ProphetModel
-from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 
 PROJECTS = [
     {
        'name': 'khoj-ai/khoj',
-       'models': [RandomForestModel],
+       'models': [RandomForestModel], #GradientBoosting, RandomForestModel],
        "recluster": False,
         "replot": False,
         "plot_options": {
