@@ -1,15 +1,11 @@
-import asyncio
-import json
 import logging
-import time
 
-import aiohttp
-import backoff
 from aiohttp import ClientResponseError
-from requests.utils import parse_header_links
 
-from src.data_handling.database.async_database import AsyncDatabase
 from config.config import CONFIG
+from src.data_handling.database.async_database import AsyncDatabase
+from src.data_handling.database.commit_repo import CommitRepository
+from src.github.http_client import GitHubClient
 
 
 class APIConnectionAsync:
@@ -17,30 +13,26 @@ class APIConnectionAsync:
 
     def __init__(self, github_repo_username_title):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.session = None
 
-        #self.config = self.load_config()
         config = CONFIG[0]['github_access_token']
         self.access_token = config
-        #self.access_token = self.config.get('github_access_token', '')
+        self.http_client = None
+        self.commit_repo = None
 
         self.github_repo_username_title = github_repo_username_title
         self.get_commits_url = f'https://api.github.com/repos/{github_repo_username_title}/commits'
         self.get_contents_url = f'https://api.github.com/repos/{github_repo_username_title}/contents'
         self.collection_name = self.github_repo_username_title.replace("/", "_")
-        self.semaphore = asyncio.Semaphore(100)
 
     @classmethod
     async def create(cls, github_repo_username_title):
         self = APIConnectionAsync(github_repo_username_title)
-        self.session = aiohttp.ClientSession()  # Create a session when an instance is created
+        self.http_client = GitHubClient(self.access_token)
+        self.commit_repo = CommitRepository(self.github_repo_username_title)
+        await self.http_client.open()
         await AsyncDatabase.initialize()
 
         return self
-
-    @property
-    def commit_list_collection(self):
-        return f'{self.collection_name}_commit_list'
 
     @property
     def full_commit_info_collection(self):
@@ -50,90 +42,40 @@ class APIConnectionAsync:
     def file_tracking_collection(self):
         return f'{self.collection_name}_file_tracking'
 
-    @staticmethod
-    def load_config():
-        try:
-            with open('config.py', 'r') as config_file:
-                return json.load(config_file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {}
-
     async def close_session(self):
-        await self.session.close()
-
-    @backoff.on_exception(backoff.expo,
-                          aiohttp.ClientError,
-                          max_tries=4,
-                          giveup=lambda e: hasattr(e, 'status') and e.status == 400
-                          )
-    async def make_request(self, url):
-        async with self.semaphore:
-            async with self.session.get(url, headers={'Authorization': f'token {self.access_token}'}) as response:
-                if 'X-RateLimit-Remaining' in response.headers and response.headers['X-RateLimit-Remaining'] < '1':
-                    reset_time = int(response.headers['X-RateLimit-Reset'])
-                    sleep_time = reset_time - time.time() + 10  # Add a buffer of 10 seconds
-                    logging.info(f'Rate limit exceeded. Sleeping for {sleep_time} seconds.')
-                    await asyncio.sleep(sleep_time)
-                    return await self.make_request(url)
-
-                response.raise_for_status()
-                return await response.json(), response.headers
-
-    async def get_next_link(self, headers):
-        link_header = headers.get('link', None)
-
-        if not link_header:
-            logging.debug("No 'link' header found in response.")
-            return None
-
-        if link_header:
-            links = parse_header_links(link_header)
-            next_link = [link['url'] for link in links if link['rel'] == 'next']
-
-            if not next_link:
-                logging.debug("No 'next' link found in 'link' header.")
-
-            return next_link[0] if next_link else None
-
+        await self.http_client.close()
 
     async def get_commit_list(self, update=False):
-        logging.info(f'Getting commit list for {self.github_repo_username_title}')
+        self.logger.info(f'Getting commit list for {self.github_repo_username_title}')
 
         url = self.get_commits_url + '?per_page=' + str(APIConnectionAsync.RESULTS_PER_PAGE)
 
-        while url:
-            response_json, headers = await self.make_request(url)
-
-            if not response_json:
-                break
-
+        async for response_json, headers in self.http_client.paginate(url):
             if update:
                 new_commits = []
                 for commit in response_json:
-                    existing_commit = await AsyncDatabase.find_one(self.commit_list_collection, {'sha': commit['sha']})
+                    existing_commit = self.commit_repo.find_commit(commit['sha'], full=False)
 
                     if not existing_commit:
                         new_commits.append(commit)
-
-                    if existing_commit:
+                    else:
                         if new_commits:
-                            await AsyncDatabase.insert_many(self.commit_list_collection, response_json)
+                            await self.commit_repo.insert_new_commits(new_commits, full=False)
+                        return
 
-                        url = None
-                        break
+                if new_commits:
+                    await self.commit_repo.insert_new_commits(new_commits, full=False)
 
             else:
-                await AsyncDatabase.insert_many(self.commit_list_collection, response_json)
+                await self.commit_repo.insert_new_commits(response_json, full=False)
 
-            if url:
-                url = await self.get_next_link(headers)
 
     """
     Objective: Calls GET api.github.com/repos/:username/:repository/commits/:sha' to receive full commit data.
     """
     async def get_commit_info(self, sha):
         get_commit_info_url = f'{self.get_commits_url}/{str(sha)}'
-        response, headers = await self.make_request(get_commit_info_url)
+        response, headers = await self.http_client.get(get_commit_info_url)
 
         file_paths = set()
         for file in response['files']:
@@ -142,17 +84,17 @@ class APIConnectionAsync:
         return response, file_paths
 
     async def batch_get_commit_info(self, batch_size=200):
-        logging.info(f'Getting batch commit info for {self.github_repo_username_title}')
+        self.logger.info(f'Getting batch commit info for {self.github_repo_username_title}')
 
         commit_info_list = []
         file_paths_set = set()
         file_path_data = []
 
-        list_shas = await AsyncDatabase.fetch_all_shas(self.commit_list_collection)
-        full_info_shas = await AsyncDatabase.fetch_all_shas(self.full_commit_info_collection)
+        list_shas = await self.commit_repo.get_all_shas(full=False)
+        full_info_shas = await self.commit_repo.get_all_shas(full=True)
         missing_shas = list_shas - full_info_shas
 
-        logging.info('Getting commit info for {} commits'.format(len(missing_shas)))
+        self.logger.info('Getting commit info for {} commits'.format(len(missing_shas)))
 
         for sha in missing_shas:
             commit_info, file_paths = await self.get_commit_info(sha)
@@ -161,13 +103,13 @@ class APIConnectionAsync:
             file_path_data = [{'path': file_path} for file_path in file_paths_set]
 
             if len(commit_info_list) >= batch_size:
-                await AsyncDatabase.insert_many(self.full_commit_info_collection, commit_info_list, data_type='commit')
+                await self.commit_repo.insert_new_commits(commit_info_list, full=True)
                 await AsyncDatabase.insert_many(self.file_tracking_collection, file_path_data, data_type='files')
                 commit_info_list.clear()
                 file_paths_set.clear()
 
         if commit_info_list or file_paths_set:
-            await AsyncDatabase.insert_many(self.full_commit_info_collection, commit_info_list, data_type='commit')
+            await self.commit_repo.insert_new_commits(commit_info_list, full=True)
             await AsyncDatabase.insert_many(self.file_tracking_collection, file_path_data, data_type='files')
 
         return file_path_data
@@ -176,15 +118,15 @@ class APIConnectionAsync:
         url = f'{self.get_contents_url}/{file_path}?ref={sha}'
 
         try:
-            response, _ = await self.make_request(url)
+            response, _ = await self.http_client.get(url)
 
             if isinstance(response, list):
-                logging.error(f"Unexpected list response for {url}: {response}")
+                self.logger.error(f"Unexpected list response for {url}: {response}")
                 return 'unexpected_list_response'
             if isinstance(response, dict) and 'size' in response:
                 return response['size']
 
-            logging.error(f"Unexpected response structure for {url}: {response}")
+            self.logger.error(f"Unexpected response structure for {url}: {response}")
             return 'unexpected_response'
 
         except ClientResponseError as e:
@@ -194,7 +136,7 @@ class APIConnectionAsync:
                 raise
 
     async def get_commit_details(self, sha):
-        commit_details = await AsyncDatabase.find_one(self.full_commit_info_collection, {'sha': sha})
+        commit_details = await self.commit_repo.find_commit(sha, full=True)
         return commit_details
 
     async def is_file_deleted_in_commit(self, commit_details, file_path):
@@ -208,7 +150,6 @@ class APIConnectionAsync:
     async def get_file_commit_history(self, file_path, update):
         url = f'{self.get_commits_url}?path={file_path}&per_page={APIConnectionAsync.RESULTS_PER_PAGE}'
         full_commit_history = []
-        visited_files = set()
 
         existing_shas = set()
         if update:
@@ -217,10 +158,10 @@ class APIConnectionAsync:
                              existing_history.get('commit_history', [])} if existing_history else set()
 
         while url:
-            commits, headers = await self.make_request(url)
+            commits, headers = await self.http_client.get(url)
 
             if not commits:
-                logging.warning('No commits found for file {}'.format(file_path))
+                self.logger.warning('No commits found for file {}'.format(file_path))
                 break
 
             for commit in commits:
@@ -230,50 +171,63 @@ class APIConnectionAsync:
                     continue
 
                 committer = (
-                        commit.get("committer", {}).get("login")
-                        or commit.get("commit", {}).get("committer", {}).get("name")
+                        (commit.get("committer") or {}).get("login")
+                        or (commit.get("commit") or {}).get("committer", {}).get("name")
                         or "unknown"
                 )
-                committer = (commit.get("committer", {}) or {}).get("login") or commit.get("commit", {}).get("committer", {}).get("name", "unknown")
                 commit_date = commit['commit']['author']['date']
                 size_or_status = await self.get_file_size_at_commit(file_path, sha)
 
-                if size_or_status == ('unexpected_list_response', 'unexpected_response'):
-                    logging.warning(f"Skipping commit {sha} for file {file_path} due to {size_or_status}")
+                if size_or_status in ('unexpected_list_response', 'unexpected_response'):
+                    self.logger.warning(f"Skipping commit {sha} for file {file_path} due to {size_or_status}")
                     continue
 
                 if size_or_status == 'file_not_found':
                     commit_details = await self.get_commit_details(commit['sha'])
+                    renamed = False
 
                     for file in commit_details.get('files', []):
-                        if file['filename'] == file_path:
-                            if file['status'] == 'removed':
-                                logging.info(f'File {file_path} was deleted in commit {commit["sha"]}')
-                                size_or_status = 0
+                        if file['filename'] != file_path:
+                            continue
 
-                            elif file['status'] == 'renamed' and 'previous_filename' in file:
-                                old_file_path = file['previous_filename']
-                                logging.info(f"File {file_path} was renamed from {old_file_path}")
+                        if file['status'] == 'removed':
+                            self.logger.info(f'File {file_path} deleted in commit {sha}')
+                            size_or_status = 0
+                            break
 
-                                # Recursively fetch history for the old file
-                                old_commit_history = await self.get_file_commit_history(old_file_path, update=False)
+                        elif file['status'] == 'renamed' and 'previous_filename' in file:
+                            old_file_path = file['previous_filename']
+                            self.logger.info(f"File {file_path} was renamed from {old_file_path} in commit {sha}")
 
-                                # Add unique commits from the old history to the current one
-                                old_shas = {commit['sha'] for commit in old_commit_history}
-                                for old_commit in old_commit_history:
-                                    if old_commit['sha'] not in existing_shas and old_commit['sha'] not in old_shas:
-                                        full_commit_history.append(old_commit)
+                            old_history = await self.get_file_commit_history(old_file_path, update=False)
+                            combined = []
+                            seen = set()
+                            for entry in old_history + full_commit_history:
+                                if entry['sha'] not in seen:
+                                    seen.add(entry['sha'])
+                                    combined.append(entry)
 
-                                result = await AsyncDatabase.delete_one(
-                                    self.file_tracking_collection,
-                                    {'path': old_file_path}
-                                )
+                            await AsyncDatabase.update_one(
+                                self.file_tracking_collection,
+                                {'path': old_file_path},
+                                {
+                                    '$set': {
+                                        'path': file_path,
+                                        'commit_history': combined
+                                    },
+                                    '$push': {
+                                        'previous_paths': old_file_path
+                                    }
+                                }
+                            )
 
-                                if result.get("deleted_count") == 0:
-                                    logging.warning(
-                                        f"Failed to delete old file record for {old_file_path}. It may not exist.")
-                                else:
-                                    logging.info(f"Deleted old file record: {old_file_path}")
+                            full_commit_history = combined
+                            size_or_status = combined[-1]['size']
+                            renamed = True
+                            break
+                    
+                    if renamed:
+                        continue
 
                 full_commit_history.append({
                     'sha': sha,
@@ -283,11 +237,11 @@ class APIConnectionAsync:
                 })
 
             # Get the next page URL from headers if available
-            next_url = await self.get_next_link(headers)
-            logging.debug(f"Next URL: {next_url}")
+            next_url = await self.http_client.get_next_link(headers)
+            self.logger.debug(f"Next URL: {next_url}")
 
-            if next_url == url:  # Sanity check to avoid infinite loops
-                logging.error(f"Pagination loop detected for file {file_path}")
+            if next_url == url:
+                self.logger.error(f"Pagination loop detected for file {file_path}")
                 break
 
             url = next_url
@@ -302,7 +256,7 @@ class APIConnectionAsync:
                     {'$push': {'commit_history': {'$each': list(unique_history)}}}
                 )
 
-                logging.info(f"Commit history for {file_path} updated with {len(unique_history)} new commits")
+                self.logger.info(f"Commit history for {file_path} updated with {len(unique_history)} new commits")
             else:
                 await AsyncDatabase.insert_many(
                     self.file_tracking_collection,
@@ -312,27 +266,27 @@ class APIConnectionAsync:
         return unique_history
 
     async def iterate_over_file_paths(self, affected_files, update=False):
-        logging.info(f'Iterating over the files of {self.github_repo_username_title} to get commit history')
+        self.logger.info(f'Iterating over the files of {self.github_repo_username_title} to get commit history')
 
         if update:
             if affected_files:
                 files_to_iterate = affected_files
             else:
-                logging.info("No files to process.")
+                self.logger.info("No files to process.")
                 return
         else:
             files_to_iterate = await AsyncDatabase.fetch_all(self.file_tracking_collection)
 
-        logging.info('Iterating over {} files'.format(len(files_to_iterate)))
+        self.logger.info('Iterating over {} files'.format(len(files_to_iterate)))
 
         for file in files_to_iterate:
             await self.get_file_commit_history(file['path'], update=update)
 
-        logging.info('All files were iterated over')
+        self.logger.info('All files were iterated over')
 
     async def populate_db(self):
         try:
-            commit_list_exists = await AsyncDatabase.find_one(self.commit_list_collection, {})
+            commit_list_exists = await self.commit_repo.find_any(full=False)
             update = commit_list_exists is not None
 
             await self.get_commit_list(update=update)
@@ -340,7 +294,4 @@ class APIConnectionAsync:
             await self.iterate_over_file_paths(file_paths, update=update)
 
         except Exception as e:
-            logging.error(f"An error occurred in populate_db: {e}", exc_info=True)
-
-        finally:
-            await self.close_session()
+            self.logger.error(f"An error occurred in populate_db: {e}", exc_info=True)

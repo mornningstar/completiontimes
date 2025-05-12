@@ -86,6 +86,9 @@ class FileModelTrainer:
         return y_pred, mse, mae, rmse, errors_df
 
     def train_and_evaluate(self, file_data_df):
+        print(file_data_df[:2])
+        file_data_df = file_data_df.groupby('path').filter(lambda g: len(g) >= 5)
+
         train_df, test_df = self.split_by_file(file_data_df)
         feature_cols = self.get_feature_cols(train_df)
         self.logger.info(f"Used feature columns: {feature_cols}")

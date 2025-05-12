@@ -44,7 +44,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     async def main():
-        repo = "khoj-ai/khoj"
+        repo = "openedx/edx-platform"
         api_conn = await APIConnectionAsync.create(repo)
         await migrate_add_committer(api_conn)
         await api_conn.close_session()

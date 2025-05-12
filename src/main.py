@@ -105,7 +105,7 @@ async def process_project(project):
             logging.exception('Error while processing project {}'.format(project_name))
         finally:
             logging.info('Project {} finished!'.format(project_name))
-            await api_connection.close_session()
+            await api_connection.http_client.close()
 
     else:
         try:
@@ -170,14 +170,12 @@ async def process_project(project):
 
         finally:
             logging.info('Project {} finished!'.format(project_name))
-            await api_connection.close_session()
+            await api_connection.http_client.close()
 
 
 async def main():
     tasks = [process_project(project) for project in PROJECTS]
     await asyncio.gather(*tasks)
 
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     asyncio.run(main())

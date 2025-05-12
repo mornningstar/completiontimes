@@ -6,7 +6,6 @@ from statsmodels.tsa.stattools import adfuller
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.repository.repository_size_handling import RepoSizeHandler
 from src.predictions.model_training import ModelTrainer
-from src.visualisations.plotting import Plotter
 
 
 def add_features(dataframe, time_col='time', count_col='commits', additions_col='additions',
