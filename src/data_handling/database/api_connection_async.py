@@ -52,16 +52,11 @@ class APIConnectionAsync:
 
         async for response_json, headers in self.http_client.paginate(url):
             if update:
-                new_commits = []
-                for commit in response_json:
-                    existing_commit = self.commit_repo.find_commit(commit['sha'], full=False)
+                new_commits = [c for c in response_json
+                               if not await self.commit_repo.find_commit(c["sha"], full=False)]
 
-                    if not existing_commit:
-                        new_commits.append(commit)
-                    else:
-                        if new_commits:
-                            await self.commit_repo.insert_new_commits(new_commits, full=False)
-                        return
+                if len(new_commits) == 0:
+                    break
 
                 if new_commits:
                     await self.commit_repo.insert_new_commits(new_commits, full=False)
@@ -88,7 +83,9 @@ class APIConnectionAsync:
 
         commit_info_list = []
         file_paths_set = set()
-        file_path_data = []
+        #file_path_data = []
+
+        all_paths = set()
 
         list_shas = await self.commit_repo.get_all_shas(full=False)
         full_info_shas = await self.commit_repo.get_all_shas(full=True)
@@ -98,21 +95,25 @@ class APIConnectionAsync:
 
         for sha in missing_shas:
             commit_info, file_paths = await self.get_commit_info(sha)
+
             commit_info_list.append(commit_info)
             file_paths_set.update(file_paths)
-            file_path_data = [{'path': file_path} for file_path in file_paths_set]
+            all_paths.update(file_paths)
 
             if len(commit_info_list) >= batch_size:
                 await self.commit_repo.insert_new_commits(commit_info_list, full=True)
-                await AsyncDatabase.insert_many(self.file_tracking_collection, file_path_data, data_type='files')
+                await AsyncDatabase.insert_many(self.file_tracking_collection,
+                                                [{'path': file_path} for file_path in file_paths_set], data_type='files')
                 commit_info_list.clear()
                 file_paths_set.clear()
 
-        if commit_info_list or file_paths_set:
+        if commit_info_list:
             await self.commit_repo.insert_new_commits(commit_info_list, full=True)
-            await AsyncDatabase.insert_many(self.file_tracking_collection, file_path_data, data_type='files')
+        if file_paths_set:
+            await AsyncDatabase.insert_many(self.file_tracking_collection,
+                                            [{'path': file_path} for file_path in file_paths_set], data_type='files')
 
-        return file_path_data
+        return [{'path': p} for p in all_paths]
 
     async def get_file_size_at_commit(self, file_path, sha):
         url = f'{self.get_contents_url}/{file_path}?ref={sha}'
@@ -121,8 +122,10 @@ class APIConnectionAsync:
             response, _ = await self.http_client.get(url)
 
             if isinstance(response, list):
-                self.logger.error(f"Unexpected list response for {url}: {response}")
-                return 'unexpected_list_response'
+                self.logger.error("Found directory")
+                return 'is_directory'
+            if response.get('type') == 'symlink':
+                return 'is_symlink'
             if isinstance(response, dict) and 'size' in response:
                 return response['size']
 
@@ -178,8 +181,8 @@ class APIConnectionAsync:
                 commit_date = commit['commit']['author']['date']
                 size_or_status = await self.get_file_size_at_commit(file_path, sha)
 
-                if size_or_status in ('unexpected_list_response', 'unexpected_response'):
-                    self.logger.warning(f"Skipping commit {sha} for file {file_path} due to {size_or_status}")
+                if size_or_status in ('unexpected_response', 'is_directory', 'is_symlink'):
+                    self.logger.warning(f"Skipping commit {sha} for file {file_path} due to: {size_or_status}")
                     continue
 
                 if size_or_status == 'file_not_found':
@@ -238,7 +241,10 @@ class APIConnectionAsync:
 
             # Get the next page URL from headers if available
             next_url = await self.http_client.get_next_link(headers)
-            self.logger.debug(f"Next URL: {next_url}")
+
+
+            if not next_url:
+                break
 
             if next_url == url:
                 self.logger.error(f"Pagination loop detected for file {file_path}")

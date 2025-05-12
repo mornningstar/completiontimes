@@ -1,11 +1,19 @@
 import asyncio
+import json
 import logging
 import time
 
 import backoff
-from aiohttp import ClientSession, ClientResponse, ClientError
+from aiohttp import ClientSession, ClientResponse, ClientError, ClientResponseError
 from requests.utils import parse_header_links
 
+from src.github.token_bucket import TokenBucket
+
+
+def _backoff_handler(details):
+    err = details["exception"]
+    if isinstance(err, ClientResponseError) and "Retry-After" in err.headers:
+        return float(err.headers["Retry-After"])
 
 class GitHubClient:
     BASE = "https://api.github.com/repos/"
@@ -17,6 +25,7 @@ class GitHubClient:
         self._headers = {
             "Authorization": f"token {auth_token}",
         }
+        self.bucket = TokenBucket()
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -30,19 +39,44 @@ class GitHubClient:
     @backoff.on_exception(backoff.expo,
                           ClientError,
                           max_tries=4,
-                          giveup=lambda e: hasattr(e, 'status') and e.status == 400
+                          giveup=lambda e: isinstance(e, ClientResponseError) and not GitHubClient._should_retry(e),
+                          on_backoff=_backoff_handler,
                           )
     async def get(self, url):
+        """ Call GET to URL while respecting the rate limit """
         async with self.semaphore:
+            await self.bucket.acquire()
+
             async with self._session.get(url, headers=self._headers) as response:
+                await self._respect_rate_limit(response)
                 response.raise_for_status()
                 data = await response.json()
-                await self._respect_rate_limit(response)
-
                 return data, response.headers
 
+    @staticmethod
+    def _should_retry(err: ClientResponseError) -> bool:
+        """ Allow a retry on 429, 403 with 0 remaining and on classic 5xx """
+        if err.status in (500, 502, 503, 429):
+            return True
+        if err.status == 403 and int(err.headers.get("X-RateLimit-Remaining", "1")) == 0:
+            return True # primary rate limit
+        if GitHubClient._secondary_rate_limited(err):
+            return True  # secondary rate limit
+        return False
+
+    @staticmethod
+    def _secondary_rate_limited(err: ClientResponseError) -> bool:
+        if err.status != 403:
+            return False
+        # GitHub puts the explanation in the JSON body
+        try:
+            body = json.loads(err.message) if isinstance(err.message, str) else {}
+            return "secondary rate limit" in (body.get("message") or "").lower()
+        except Exception:
+            return False
+
     async def _respect_rate_limit(self, response: ClientResponse):
-        remaining = int(response.headers['X-RateLimit-Remaining'])
+        remaining = int(response.headers.get('X-RateLimit-Remaining', '1'))
         if remaining > 0:
             return
 

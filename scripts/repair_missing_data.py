@@ -3,6 +3,7 @@ import json
 import os
 
 from src.data_handling.database.api_connection_async import APIConnectionAsync
+from src.data_handling.database.async_database import AsyncDatabase
 
 REPO = "openedx/edx-platform"
 
@@ -15,13 +16,18 @@ async def retry_failed_commits():
         failed_shas = json.load(f)
 
     conn = await APIConnectionAsync.create(REPO)
-    for sha in failed_shas:
-        try:
-            await conn.get_commit_info(sha)
-        except Exception as e:
-            print(f"Retry failed for {sha}: {e}")
 
-    await conn.close_session()
+    try:
+        async def fetch_and_store(sha: str):
+            try:
+                info, _ = await conn.get_commit_info(sha)
+                await conn.commit_repo.insert_new_commits([info], full=True)
+            except Exception as exc:
+                print(f"Retry failed for {sha}: {exc}")
+
+        await asyncio.gather(*(fetch_and_store(s) for s in failed_shas))
+    finally:
+        await conn.close_session()
 
 async def retry_failed_files():
     if not os.path.exists("failed_files.json"):
@@ -33,36 +39,43 @@ async def retry_failed_files():
 
     conn = await APIConnectionAsync.create(REPO)
 
-    for path in failed_paths:
-        try:
-            await conn.get_file_commit_history(path, update=True)
-        except Exception as e:
-            print(f"Retry failed for {path}: {e}")
+    try:
+        async def fetch_and_store(path):
+            try:
+                await conn.get_file_commit_history(path, update=True)
+            except Exception as e:
+                print(f"Retry failed for {path}: {e}")
 
-    await conn.close_session()
+        await asyncio.gather(*(fetch_and_store(path) for path in failed_paths))
+
+    finally:
+        await conn.close_session()
 
 async def find_and_refetch_missing_commit_infos():
     conn = await APIConnectionAsync.create(REPO)
-    all_shas = await conn.repo.fetch_all_commit_shas()
-    full_shas = await conn.repo.fetch_all_full_commit_shas()
+    all_shas = await conn.commit_repo.get_all_shas(full=False)
+    full_shas = await conn.commit_repo.get_all_shas(full=True)
     missing_shas = all_shas - full_shas
 
     print(f"Found {len(missing_shas)} missing commit infos.")
 
-    for sha in missing_shas:
-        try:
-            commit_info, file_paths = await conn.get_commit_info(sha)
-            await conn.repo.insert_full_commit_info([commit_info])
-        except Exception as e:
-            print(f"Failed to refetch {sha}: {e}")
+    try:
+        async def find(sha):
+            try:
+                commit_info, file_paths = await conn.get_commit_info(sha)
+                await conn.commit_repo.insert_new_commits([commit_info], full=True)
+            except Exception as e:
+                print(f"Failed to refetch {sha}: {e}")
 
-    await conn.close_session()
+        await asyncio.gather(*(find(sha) for sha in missing_shas))
+    finally:
+        await conn.close_session()
 
 async def find_files_with_empty_or_missing_history():
     conn = await APIConnectionAsync.create(REPO)
 
     files_with_issues = []
-    all_files = await conn.repo.fetch_all_file_tracking()
+    all_files = await AsyncDatabase.fetch_all(conn.file_tracking_collection)
 
     for file in all_files:
         if not file.get("commit_history"):
@@ -83,13 +96,16 @@ async def retry_incomplete_file_histories():
 
     conn = await APIConnectionAsync.create(REPO)
 
-    for path in incomplete_paths:
-        try:
-            await conn.get_file_commit_history(path, update=True)
-        except Exception as e:
-            print(f"Retry failed for incomplete file {path}: {e}")
+    try:
+        async def _fix(path: str) -> None:
+            try:
+                await conn.get_file_commit_history(path, update=True)
+            except Exception as exc:
+                print(f"Retry failed for incomplete file {path}: {exc}")
 
-    await conn.close_session()
+        await asyncio.gather(*(_fix(p) for p in incomplete_paths))
+    finally:
+            await conn.close_session()
 
 if __name__ == "__main__":
     async def main():

@@ -4,14 +4,8 @@ from src.data_handling.database.async_database import AsyncDatabase
 class CommitRepository:
     def __init__(self, repo: str):
         self.collection_name = repo.replace("/", "_")
-
-    @property
-    def commit_list_collection(self):
-        return f"{self.collection_name}_commit_list"
-
-    @property
-    def full_commit_info_collection(self):
-        return f"{self.collection_name}_full_commit_info"
+        self.commit_list_collection = f"{self.collection_name}_commit_list"
+        self.full_commit_info_collection = f"{self.collection_name}_full_commit_info"
 
     # --------------------------------------------------------------------- #
     # Public API                                                            #
