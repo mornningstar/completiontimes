@@ -6,7 +6,6 @@ from datetime import datetime
 
 import backoff
 from aiohttp import ClientSession, ClientResponse, ClientError, ClientResponseError
-from dateutil.tz import tzlocal
 from requests.utils import parse_header_links
 
 from src.github.token_bucket import TokenBucket
@@ -18,7 +17,7 @@ def _backoff_handler(details):
         return float(err.headers["Retry-After"])
 
 class GitHubClient:
-    BASE = "https://api.github.com/repos/"
+    """ Wrapper around aiohttp to be able to talk to the GitHub API. """
 
     def __init__(self, auth_token: str, concurrency: int = 100):
         self.auth_token = auth_token
@@ -103,14 +102,12 @@ class GitHubClient:
         link_header = headers.get('link')
 
         if not link_header:
-            self.logger.debug("No 'link' header found in response.")
             return None
 
         links = parse_header_links(link_header)
         next_link = [link['url'] for link in links if link['rel'] == 'next']
 
         if not next_link:
-            self.logger.debug("No 'next' link found in 'link' header.")
             return None
 
         return next_link[0]

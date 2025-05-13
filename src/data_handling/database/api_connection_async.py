@@ -5,10 +5,12 @@ from aiohttp import ClientResponseError
 from config.config import CONFIG
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.commit_repo import CommitRepository
+from src.data_handling.database.file_repo import FileRepository
 from src.github.http_client import GitHubClient
 
 
 class APIConnectionAsync:
+    """ High-level GitHub & Mongo sync service. A service layer. """
     RESULTS_PER_PAGE = 100
 
     def __init__(self, github_repo_username_title):
@@ -18,6 +20,7 @@ class APIConnectionAsync:
         self.access_token = config
         self.http_client = None
         self.commit_repo = None
+        self.file_repo = None
 
         self.github_repo_username_title = github_repo_username_title
         self.get_commits_url = f'https://api.github.com/repos/{github_repo_username_title}/commits'
@@ -29,18 +32,11 @@ class APIConnectionAsync:
         self = APIConnectionAsync(github_repo_username_title)
         self.http_client = GitHubClient(self.access_token)
         self.commit_repo = CommitRepository(self.github_repo_username_title)
+        self.file_repo = FileRepository(self.github_repo_username_title)
         await self.http_client.open()
         await AsyncDatabase.initialize()
 
         return self
-
-    @property
-    def full_commit_info_collection(self):
-        return f"{self.collection_name}_full_commit_info"
-
-    @property
-    def file_tracking_collection(self):
-        return f'{self.collection_name}_file_tracking'
 
     async def close_session(self):
         await self.http_client.close()
@@ -109,8 +105,7 @@ class APIConnectionAsync:
 
                 new_to_write = file_paths_set - written_paths
                 if new_to_write:
-                    await AsyncDatabase.insert_many(self.file_tracking_collection,
-                                                [{'path': file_path} for file_path in new_to_write], data_type='files')
+                    await self.file_repo.insert_new_files([{'path': file_path} for file_path in new_to_write])
                     written_paths.update(new_to_write)
                 file_paths_set.clear()
 
@@ -119,8 +114,7 @@ class APIConnectionAsync:
         if file_paths_set:
             new_to_write = file_paths_set - written_paths
             if new_to_write:
-                await AsyncDatabase.insert_many(self.file_tracking_collection,
-                                            [{'path': file_path} for file_path in new_to_write], data_type='files')
+                await self.file_repo.insert_new_files([{'path': file_path} for file_path in new_to_write])
 
         return [{'path': p} for p in all_paths]
 
@@ -165,7 +159,7 @@ class APIConnectionAsync:
         existing_shas = set()
 
         if update:
-            existing_history = await AsyncDatabase.find_one(self.file_tracking_collection, {'path': file_path})
+            existing_history = await self.file_repo.find_file_data(file_path)
             existing_shas = {commit['sha'] for commit in
                              existing_history.get('commit_history', [])} if existing_history else set()
 
@@ -219,20 +213,7 @@ class APIConnectionAsync:
                                     seen.add(entry['sha'])
                                     combined.append(entry)
 
-                            await AsyncDatabase.update_one(
-                                self.file_tracking_collection,
-                                {'path': old_file_path},
-                                {
-                                    '$set': {
-                                        'path': file_path,
-                                        'commit_history': combined
-                                    },
-                                    '$push': {
-                                        'previous_paths': old_file_path
-                                    }
-                                },
-                                upsert = True
-                            )
+                            await self.file_repo.update_file_data(old_file_path, file_path, combined, upsert=True)
 
                             full_commit_history = combined
                             size_or_status = combined[-1]['size']
@@ -265,18 +246,11 @@ class APIConnectionAsync:
 
         if unique_history:
             if update and existing_shas:  # Append to existing history in update mode
-                await AsyncDatabase.update_one(
-                    self.file_tracking_collection,
-                    {'path': file_path},
-                    {'$push': {'commit_history': {'$each': list(unique_history)}}}
-                )
+                await self.file_repo.append_commit_history(file_path, list(unique_history), upsert=False)
 
                 self.logger.info(f"Commit history for {file_path} updated with {len(unique_history)} new commits")
             else:
-                await AsyncDatabase.insert_many(
-                    self.file_tracking_collection,
-                    [{'path': file_path, 'commit_history': list(unique_history)}], data_type='files'
-                )
+                await self.file_repo.insert_file_with_history(file_path, list(unique_history))
 
         return unique_history
 
@@ -290,7 +264,7 @@ class APIConnectionAsync:
                 self.logger.info("No files to process.")
                 return
         else:
-            files_to_iterate = await AsyncDatabase.fetch_all(self.file_tracking_collection)
+            files_to_iterate = await self.file_repo.get_all()
 
         self.logger.info('Iterating over {} files'.format(len(files_to_iterate)))
 

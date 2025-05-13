@@ -8,7 +8,7 @@ from src.data_handling.database.async_database import AsyncDatabase
 async def migrate_add_committer(api_connection):
     await AsyncDatabase.initialize()
 
-    files = await AsyncDatabase.fetch_all(api_connection.file_tracking_collection)
+    files = await api_connection.file_repo.get_all()
 
     for file in files:
         path = file["path"]
@@ -19,7 +19,7 @@ async def migrate_add_committer(api_connection):
             if not sha:
                 continue
 
-            full_info = await AsyncDatabase.find_one(api_connection.full_commit_info_collection, {"sha": sha})
+            full_info = await api_connection.commit_repo.find_commit(sha, full=True)
             if not full_info:
                 continue
 
@@ -32,11 +32,8 @@ async def migrate_add_committer(api_connection):
             commit["committer"] = committer
             updated_history.append(commit)
 
-        await AsyncDatabase.update_one(
-            api_connection.file_tracking_collection,
-            {"path": path},
-            {"$set": {"commit_history": updated_history}}
-        )
+        await api_connection.file_repo.replace_commit_history(path, updated_history)
+
 
         logging.info(f"Updated committer info for file: {path}")
 

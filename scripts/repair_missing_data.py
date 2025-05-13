@@ -75,7 +75,7 @@ async def find_files_with_empty_or_missing_history():
     conn = await APIConnectionAsync.create(REPO)
 
     files_with_issues = []
-    all_files = await AsyncDatabase.fetch_all(conn.file_tracking_collection)
+    all_files = await conn.file_repo.get_all()
 
     for file in all_files:
         if not file.get("commit_history"):
@@ -109,7 +109,6 @@ async def retry_incomplete_file_histories():
 
 if __name__ == "__main__":
     async def main():
-
         await find_and_refetch_missing_commit_infos()
         await find_files_with_empty_or_missing_history()
         await retry_failed_commits()

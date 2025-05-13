@@ -20,9 +20,7 @@ class FileFeatureEngineer:
 
     async def fetch_all_files(self):
 
-        all_files_data = await AsyncDatabase.fetch_all(
-            self.api_connection.file_tracking_collection
-        )
+        all_files_data = await self.api_connection.file_repo.get_all()
 
         rows = []
         for file_data in all_files_data:
@@ -332,9 +330,7 @@ class FileFeatureEngineer:
 
         for path, group in grouped_features:
             features = group.reset_index().to_dict(orient="records")
-            query = {"path": path}
-            update = {"$set": {"features": features}}  # Save features as a list under "features"
-            await AsyncDatabase.update_one(self.api_connection.file_tracking_collection, query, update)
+            await self.api_connection.file_repo.append_features_to_file(path, features, upsert=False)
 
     async def run(self):
         """

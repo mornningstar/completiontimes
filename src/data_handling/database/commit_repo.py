@@ -7,7 +7,7 @@ class CommitRepository:
         self.commit_list_collection = f"{self.collection_name}_commit_list"
         self.full_commit_info_collection = f"{self.collection_name}_full_commit_info"
 
-    # --------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------
     # Public API                                                            #
     # --------------------------------------------------------------------- #
 

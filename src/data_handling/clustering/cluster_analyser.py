@@ -116,7 +116,7 @@ class ClusterAnalyser:
             cluster_id = int(rows_with_file['cluster'].mode()[0])
 
             task = AsyncDatabase.update_one(
-                self.api_connection.file_tracking_collection,
+                self.api_connection.file_repo.file_tracking_collection,
                 {'path': file},
                 {'$set': {'cluster': cluster_id}}
             )
