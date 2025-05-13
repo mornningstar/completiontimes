@@ -20,10 +20,12 @@ class TokenBucket:
             while self.timestamps and now - self.timestamps[0] > self.window:
                 self.timestamps.popleft()
             
-            if len(self.timestamps) >= self.capacity:
-                # wait until at least one token slides out
-                sleep_for = self.window - (now - self.timestamps[0]) + 0.01
-                self.logger.debug(f"Token bucket full. Sleeping for {sleep_for}")
-                await asyncio.sleep(sleep_for)
+            if len(self.timestamps) < self.capacity:
+                self.timestamps.append(now)
+                return
             
-            self.timestamps.append(time.time())
+            oldest = self.timestamps[0]
+            sleep_for = self.window - (now - oldest) + 0.01
+            self.logger.debug(f"Bucket full, sleeping {sleep_for:.2f}s")
+
+        await asyncio.sleep(sleep_for)

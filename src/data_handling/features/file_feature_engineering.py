@@ -4,23 +4,23 @@ import numpy as np
 import pandas as pd
 
 from src.data_handling.database.async_database import AsyncDatabase
+from src.data_handling.database.file_repo import FileRepository
 from src.visualisations.model_plotting import ModelPlotter
 
 
 class FileFeatureEngineer:
 
-    def __init__(self, api_connection, project_name, threshold, consecutive_days, images_dir):
-        self.api_connection = api_connection
-        self.project_name = project_name
+    def __init__(self, file_repo: FileRepository, plotter: ModelPlotter, threshold, consecutive_days):
+        self.file_repo = file_repo
         self.threshold = threshold
         self.consecutive_days = consecutive_days
 
-        self.plotter = ModelPlotter(self.project_name, images_dir=images_dir)
+        self.plotter = plotter
         self.logging = logging.getLogger(self.__class__.__name__)
 
     async def fetch_all_files(self):
 
-        all_files_data = await self.api_connection.file_repo.get_all()
+        all_files_data = await self.file_repo.get_all()
 
         rows = []
         for file_data in all_files_data:
@@ -57,12 +57,11 @@ class FileFeatureEngineer:
         df["age_in_days"] = (df["date"] - first_commit).dt.days
 
         path_lower = df["path"].str.lower()
-        config_extensions = {"json", "yaml", "yml", "ini", "toml", "env", "cfg"}
+        config_extensions = {"json", "yaml", "yml", "ini", "toml", "env", "cfg", "conf", "ini"}
         source_code_exts = (".py", ".js", ".ts", ".rb", ".java", ".cpp", ".c", ".cs", ".go", ".rs", ".php", ".swift")
 
         df["is_config_file"] = df["file_extension"].isin(config_extensions)
         df["is_markdown"] = path_lower.str.endswith((".md", ".markdown")).astype(int)
-        df["is_config_file"] = path_lower.str.endswith((".ini", ".cfg", ".conf", ".toml", ".yml", ".yaml")).astype(int)
         df["is_desktop_entry"] = path_lower.str.endswith(".desktop").astype(int)
         df["is_workflow_file"] = path_lower.str.contains(r"\.github/workflows/").astype(int)
         df["has_readme_name"] = path_lower.str.contains(r"readme").astype(int)
@@ -174,8 +173,9 @@ class FileFeatureEngineer:
 
         df["normalized_early_growth"] = (
             df.groupby("path").apply(early_growth_ratio)
-            .reindex(df["path"].values)
-            .values
+            .reset_index(level=0, drop=True)
+            #.reindex(df["path"].values)
+            #.values
         )
 
         df["recent_contribution_ratio"] = (
@@ -330,13 +330,12 @@ class FileFeatureEngineer:
 
         for path, group in grouped_features:
             features = group.reset_index().to_dict(orient="records")
-            await self.api_connection.file_repo.append_features_to_file(path, features, upsert=False)
+            await self.file_repo.append_features_to_file(path, features, upsert=False)
 
     async def run(self):
         """
         Fetch all files, compute features, and save them back to the database.
         """
-        self.logging.info(f"Running feature engineering for project: {self.project_name}")
 
         file_df = await self.fetch_all_files()
         file_features = self.calculate_metrics(file_df)
@@ -348,6 +347,6 @@ class FileFeatureEngineer:
 
         await self.save_features_to_db(file_features)
 
-        self.logging.info(f"Finished feature engineering for project: {self.project_name}")
+
 
         return file_features

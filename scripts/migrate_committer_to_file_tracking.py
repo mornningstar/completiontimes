@@ -1,14 +1,17 @@
 import asyncio
 import logging
 
-from src.data_handling.database.api_connection_async import APIConnectionAsync
+from config.config import CONFIG
 from src.data_handling.database.async_database import AsyncDatabase
+from src.data_handling.database.commit_repo import CommitRepository
+from src.data_handling.database.file_repo import FileRepository
+from src.github.http_client import GitHubClient
 
 
-async def migrate_add_committer(api_connection):
+async def migrate_add_committer(file_repo: FileRepository, commit_repo: CommitRepository):
     await AsyncDatabase.initialize()
 
-    files = await api_connection.file_repo.get_all()
+    files = await file_repo.get_all()
 
     for file in files:
         path = file["path"]
@@ -19,7 +22,7 @@ async def migrate_add_committer(api_connection):
             if not sha:
                 continue
 
-            full_info = await api_connection.commit_repo.find_commit(sha, full=True)
+            full_info = await commit_repo.find_commit(sha, full=True)
             if not full_info:
                 continue
 
@@ -28,12 +31,10 @@ async def migrate_add_committer(api_connection):
             else:
                 committer = full_info.get("commit", {}).get("committer", {}).get("name", "unknown")
 
-            #committer = full_info.get("committer", {}).get("login", "unknown")
             commit["committer"] = committer
             updated_history.append(commit)
 
-        await api_connection.file_repo.replace_commit_history(path, updated_history)
-
+        await file_repo.replace_commit_history(path, updated_history)
 
         logging.info(f"Updated committer info for file: {path}")
 
@@ -42,8 +43,17 @@ if __name__ == "__main__":
 
     async def main():
         repo = "openedx/edx-platform"
-        api_conn = await APIConnectionAsync.create(repo)
-        await migrate_add_committer(api_conn)
-        await api_conn.close_session()
+        auth = CONFIG[0]["github_access_token"]
+        client = GitHubClient(auth)
+
+        try:
+            await client.open()
+            await AsyncDatabase.initialize()
+            file_repo = FileRepository(repo)
+            commit_repo = CommitRepository(repo)
+
+            await migrate_add_committer(file_repo, commit_repo)
+        finally:
+            await client.close()
 
     asyncio.run(main())
