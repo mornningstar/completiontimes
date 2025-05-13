@@ -6,10 +6,8 @@ import platform
 
 from config.projects import PROJECTS
 from src.data_handling.database.api_connection_async import APIConnectionAsync
-from src.data_handling.clustering.file_cooccurence_analyser import FileCooccurrenceAnalyser
 from src.data_handling.features.file_feature_engineering import FileFeatureEngineer
 from src.predictions.file_model_trainer import FileModelTrainer
-from src.visualisations.commit_visualiser import CommitVisualiser
 from src.visualisations.file_visualiser import FileVisualiser
 
 if platform.system() == 'Windows':
@@ -64,109 +62,36 @@ async def process_file_visualiser(api_connection, project_name, file_path, commi
 async def process_project(project):
     project_name = project['name']
     models = project.get('models', [])
-    file_modeling_tasks = project.get('file_modeling_tasks', {})
-    modeling_tasks = project.get('modeling', [])
-    recluster = project.get('recluster', True)
-    replot = project.get('replot', False)
-    plot_options = project.get('plot_options', {})
 
     api_connection = await APIConnectionAsync.create(project_name)
 
-    task = "REGRESSION" # or "OLD"
+    try:
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        run_output_dir = os.path.join(project_name, "runs", timestamp)
+        os.makedirs(run_output_dir, exist_ok=True)
 
-    if task == "REGRESSION":
-        try:
-            timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            run_output_dir = os.path.join(project_name, "runs", timestamp)
-            os.makedirs(run_output_dir, exist_ok=True)
+        images_dir = os.path.join(run_output_dir, "images")
+        logging.info("images_dir: {}".format(images_dir))
+        models_dir = os.path.join(run_output_dir, "models")
 
-            images_dir = os.path.join(run_output_dir, "images")
-            logging.info("images_dir: {}".format(images_dir))
-            models_dir = os.path.join(run_output_dir, "models")
+        logging.info(f"Starting processing for project: {project_name}")
+        await api_connection.populate_db()
 
-            logging.info(f"Starting processing for project: {project_name}")
-            await api_connection.populate_db()
+        feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.05, consecutive_days=14,
+                                                images_dir=images_dir)
+        file_features = await feature_engineer.run()
 
-            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.05, consecutive_days=14,
-                                                   images_dir=images_dir)
-            file_features = await feature_engineer.run()
+        for model in models:
+            logging.info(f"Using {model.__class__.__name__}")
+            file_model_trainer = FileModelTrainer(project_name, model, images_dir=images_dir, output_dir=models_dir)
+            file_model_trainer.train_and_evaluate(file_features)
+            result = file_model_trainer.predict_unlabeled_files(file_features)
 
-            for model in models:
-                logging.info(f"Using {model.__class__.__name__}")
-                file_model_trainer = FileModelTrainer(project_name, model, images_dir=images_dir, output_dir=models_dir)
-                file_model_trainer.train_and_evaluate(file_features)
-                result = file_model_trainer.predict_unlabeled_files(file_features)
-                print(result.head(10))
-
-        except Exception:
-            logging.exception('Error while processing project {}'.format(project_name))
-        finally:
-            logging.info('Project {} finished!'.format(project_name))
-            await api_connection.http_client.close()
-
-    else:
-        try:
-            logging.info(f"Starting processing for project: {project_name}")
-            await api_connection.populate_db()
-
-            feature_engineer = FileFeatureEngineer(api_connection, project_name, threshold=0.1, consecutive_days=14,
-                                                   images_dir="images")
-
-            all_file_features = await feature_engineer.run()
-
-            commit_data = await api_connection.commit_repo.get_all(full=True)
-
-            cooccurrence_analyser = FileCooccurrenceAnalyser(
-                commit_data, project_name, api_connection, all_file_features
-            )
-
-            cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await (
-                cooccurrence_analyser.run(recluster=recluster))
-
-            if cluster_combined_df is None or cluster_combined_df.empty:
-                logging.error(f"Cluster combined dataframe is None or empty for project {project_name}!")
-            else:
-                logging.info(f"Cluster combined dataframe preview:\n{cluster_combined_df.head()}")
-
-            if replot:
-                logging.info(f"Replotting enabled for project: {project_name}")
-                cooccurrence_analyser.plot(
-                    cooccurrence_df=cooccurrence_df,
-                    cooccurrence_categorized_df=cooccurrence_categorized_df,
-                    proximity_df=proximity_df,
-                    combined_df=cluster_combined_df,
-                    plot_options=plot_options
-                )
-
-            tasks = []
-            for target, config in file_modeling_tasks.items():
-                cluster_enabled = config.get('cluster', False)
-                files = config.get('files', [])
-
-                tasks.extend([
-                    process_file_visualiser(
-                        api_connection, project_name, file_path, commit_visualiser, models, target,
-                        all_file_features, project
-                    ) for file_path in files
-                ])
-
-                if cluster_enabled and cluster_combined_df is not None:
-                    logging.info(f"I am inside the task. Clusters found: {cluster_combined_df['cluster'].unique()}")
-                    tasks.extend([process_file_visualiser(
-                        api_connection, project_name, None, commit_visualiser, models, target,
-                        all_file_features, project, cluster_combined_df=cluster_combined_df
-                    )]
-                    )
-
-
-            await asyncio.gather(*tasks)
-
-        except Exception:
-            logging.exception('Error while processing project {}'.format(project_name))
-
-        finally:
-            logging.info('Project {} finished!'.format(project_name))
-            await api_connection.http_client.close()
+    except Exception:
+        logging.exception('Error while processing project {}'.format(project_name))
+    finally:
+        logging.info('Project {} finished!'.format(project_name))
+        await api_connection.http_client.clos
 
 
 async def main():

@@ -260,17 +260,18 @@ class FileFeatureEngineer:
             group = group.copy().sort_values("date")
 
             # Strategy 1: Detect consecutive low-change commits
-            changes = group["percentage_change"].abs().fillna(np.inf)
-            below_threshold = changes < threshold
+            pct = group["percentage_change"].abs().fillna(0)
+            sum_pct = pct.rolling(window=consecutive_days,
+                                  min_periods=consecutive_days).sum()
 
-            rolling_sum = below_threshold.rolling(window=consecutive_days, min_periods=consecutive_days).sum()
-            valid_indices = rolling_sum[rolling_sum >= consecutive_days].index
+            valid = sum_pct[sum_pct < threshold]
 
-            if not valid_indices.empty:
+            if not valid.empty:
                 # Find the corresponding date in the original group
-                completion_idx = valid_indices[0]
+                completion_idx = valid.index[-1]
                 raw_date = group.loc[completion_idx, 'date']
                 completion_date = pd.Timestamp(raw_date).tz_localize(None).to_pydatetime()
+
                 df.loc[df["path"] == path, "completion_date"] = completion_date
                 df.loc[df["path"] == path, "completion_reason"] = "stable_pattern"
                 continue

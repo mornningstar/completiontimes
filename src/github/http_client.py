@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime
 
 import backoff
 from aiohttp import ClientSession, ClientResponse, ClientError, ClientResponseError
+from dateutil.tz import tzlocal
 from requests.utils import parse_header_links
 
 from src.github.token_bucket import TokenBucket
@@ -81,9 +83,10 @@ class GitHubClient:
             return
 
         reset_time = int(response.headers['X-RateLimit-Reset'])
+        local_reset_time = datetime.fromtimestamp(reset_time)
         sleep_time = reset_time - time.time() + 5  # Add a buffer of 5 seconds
-        self.logger.info(f'Rate limit exceeded. Sleeping for {sleep_time} seconds.')
-        
+        self.logger.info(f'Rate limit exceeded. Sleeping for {sleep_time} seconds until {local_reset_time}.')
+
         await asyncio.sleep(sleep_time)
 
     async def paginate(self, url):
