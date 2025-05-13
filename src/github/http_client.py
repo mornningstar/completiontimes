@@ -84,7 +84,7 @@ class GitHubClient:
 
         reset_time = int(response.headers['X-RateLimit-Reset'])
         local_reset_time = datetime.fromtimestamp(reset_time)
-        sleep_time = reset_time - time.time() + 5  # Add a buffer of 5 seconds
+        sleep_time = reset_time - time.time() + 2  # Add a buffer of 2 seconds
         self.logger.info(f'Rate limit exceeded. Sleeping for {sleep_time} seconds until {local_reset_time}.')
 
         await asyncio.sleep(sleep_time)
