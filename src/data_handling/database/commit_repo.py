@@ -27,6 +27,9 @@ class CommitRepository:
         """ Return all available SHAs stored in db collection """
         return await AsyncDatabase.fetch_all_shas(self._collection(full))
 
+    async def get_all(self, full: bool = False):
+        return await AsyncDatabase.find(self._collection(full), {})
+
     # --------------------------------------------------------------------- #
     # Helpers                                                               #
     # --------------------------------------------------------------------- #

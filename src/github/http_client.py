@@ -83,6 +83,7 @@ class GitHubClient:
         reset_time = int(response.headers['X-RateLimit-Reset'])
         sleep_time = reset_time - time.time() + 5  # Add a buffer of 5 seconds
         self.logger.info(f'Rate limit exceeded. Sleeping for {sleep_time} seconds.')
+        
         await asyncio.sleep(sleep_time)
 
     async def paginate(self, url):

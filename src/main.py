@@ -91,9 +91,6 @@ async def process_project(project):
                                                    images_dir=images_dir)
             file_features = await feature_engineer.run()
 
-            commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
-            await commit_visualiser.get_commits()
-
             for model in models:
                 logging.info(f"Using {model.__class__.__name__}")
                 file_model_trainer = FileModelTrainer(project_name, model, images_dir=images_dir, output_dir=models_dir)
@@ -117,11 +114,10 @@ async def process_project(project):
 
             all_file_features = await feature_engineer.run()
 
-            commit_visualiser = CommitVisualiser(api_connection, project_name, models, modeling_tasks)
-            await commit_visualiser.get_commits()
+            commit_data = await api_connection.commit_repo.get_all(full=True)
 
             cooccurrence_analyser = FileCooccurrenceAnalyser(
-                commit_visualiser.commit_data, project_name, api_connection, all_file_features
+                commit_data, project_name, api_connection, all_file_features
             )
 
             cooccurrence_df, cooccurrence_categorized_df, proximity_df, cluster_combined_df = await (

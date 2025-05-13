@@ -48,21 +48,23 @@ class APIConnectionAsync:
     async def get_commit_list(self, update=False):
         self.logger.info(f'Getting commit list for {self.github_repo_username_title}')
 
-        url = self.get_commits_url + '?per_page=' + str(APIConnectionAsync.RESULTS_PER_PAGE)
+        url = self.get_commits_url + '?per_page=' + str(APIConnectionAsync.RESULTS_PER_PAGE) # to http_client!
 
-        async for response_json, headers in self.http_client.paginate(url):
+        async for page, headers in self.http_client.paginate(url):
             if update:
-                new_commits = [c for c in response_json
-                               if not await self.commit_repo.find_commit(c["sha"], full=False)]
+                new_commits = []
+                for commit in page:
+                    if not await self.commit_repo.find_commit(commit['sha'], full=False):
+                        new_commits.append(commit)
 
-                if len(new_commits) == 0:
-                    break
-
-                if new_commits:
                     await self.commit_repo.insert_new_commits(new_commits, full=False)
+                    
+                    if not new_commits:
+                        self.logger.info("No new commits found on this page, stopping pagination.")
+                        break
 
             else:
-                await self.commit_repo.insert_new_commits(response_json, full=False)
+                await self.commit_repo.insert_new_commits(page, full=False)
 
 
     """
@@ -83,9 +85,8 @@ class APIConnectionAsync:
 
         commit_info_list = []
         file_paths_set = set()
-        #file_path_data = []
-
         all_paths = set()
+        written_paths = set() # to avoid duplicate writes
 
         list_shas = await self.commit_repo.get_all_shas(full=False)
         full_info_shas = await self.commit_repo.get_all_shas(full=True)
@@ -94,24 +95,32 @@ class APIConnectionAsync:
         self.logger.info('Getting commit info for {} commits'.format(len(missing_shas)))
 
         for sha in missing_shas:
-            commit_info, file_paths = await self.get_commit_info(sha)
-
+            commit_info, paths = await self.get_commit_info(sha)
             commit_info_list.append(commit_info)
+
+            # filter out directory-like names (require a dot)
+            file_paths = {p for p in paths if '.' in p.rsplit('/', 1)[-1]}
             file_paths_set.update(file_paths)
             all_paths.update(file_paths)
 
             if len(commit_info_list) >= batch_size:
                 await self.commit_repo.insert_new_commits(commit_info_list, full=True)
-                await AsyncDatabase.insert_many(self.file_tracking_collection,
-                                                [{'path': file_path} for file_path in file_paths_set], data_type='files')
                 commit_info_list.clear()
+
+                new_to_write = file_paths_set - written_paths
+                if new_to_write:
+                    await AsyncDatabase.insert_many(self.file_tracking_collection,
+                                                [{'path': file_path} for file_path in new_to_write], data_type='files')
+                    written_paths.update(new_to_write)
                 file_paths_set.clear()
 
         if commit_info_list:
             await self.commit_repo.insert_new_commits(commit_info_list, full=True)
         if file_paths_set:
-            await AsyncDatabase.insert_many(self.file_tracking_collection,
-                                            [{'path': file_path} for file_path in file_paths_set], data_type='files')
+            new_to_write = file_paths_set - written_paths
+            if new_to_write:
+                await AsyncDatabase.insert_many(self.file_tracking_collection,
+                                            [{'path': file_path} for file_path in new_to_write], data_type='files')
 
         return [{'path': p} for p in all_paths]
 
@@ -153,8 +162,8 @@ class APIConnectionAsync:
     async def get_file_commit_history(self, file_path, update):
         url = f'{self.get_commits_url}?path={file_path}&per_page={APIConnectionAsync.RESULTS_PER_PAGE}'
         full_commit_history = []
-
         existing_shas = set()
+
         if update:
             existing_history = await AsyncDatabase.find_one(self.file_tracking_collection, {'path': file_path})
             existing_shas = {commit['sha'] for commit in
@@ -221,7 +230,8 @@ class APIConnectionAsync:
                                     '$push': {
                                         'previous_paths': old_file_path
                                     }
-                                }
+                                },
+                                upsert = True
                             )
 
                             full_commit_history = combined
@@ -241,7 +251,6 @@ class APIConnectionAsync:
 
             # Get the next page URL from headers if available
             next_url = await self.http_client.get_next_link(headers)
-
 
             if not next_url:
                 break
