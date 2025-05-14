@@ -27,6 +27,8 @@ class GitHubClient:
             "Authorization": f"token {auth_token}",
         }
         self.bucket = TokenBucket()
+        self.rate_limit_lock = asyncio.Lock()
+        self.rate_limit_reset_time = 0
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -82,9 +84,15 @@ class GitHubClient:
             return
 
         reset_time = int(response.headers['X-RateLimit-Reset'])
-        local_reset_time = datetime.fromtimestamp(reset_time)
         sleep_time = reset_time - time.time() + 2  # Add a buffer of 2 seconds
-        self.logger.info(f'Rate limit exceeded. Sleeping for {sleep_time} seconds until {local_reset_time}.')
+
+        async with self.rate_limit_lock:
+            if time.time() < self.rate_limit_reset_time:
+                return
+
+            self.rate_limit_reset_time = reset_time
+            local_reset_time = datetime.fromtimestamp(reset_time)
+            self.logger.info(f'Rate limit exceeded. Sleeping for {sleep_time} seconds until {local_reset_time}.')
 
         await asyncio.sleep(sleep_time)
 

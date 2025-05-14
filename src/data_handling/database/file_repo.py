@@ -20,6 +20,12 @@ class FileRepository:
     async def find_file_data(self, file_path: str):
         return await self._db.find_one(self.file_tracking_collection, {'path': file_path})
 
+    async def has_commit_for_file(self, file_path: str, sha: str):
+        doc = await self._db.find_one(self.file_tracking_collection,
+                                      {"path": file_path, "commit_history.sha": sha}, projection={"_id": 1}
+                                      )
+        return doc is not None
+
     async def update_file_data(self, old_path: str, new_path: str, combined_history: list[str], upsert: bool = True):
         query = {'path': old_path}
         update = {
@@ -59,3 +65,7 @@ class FileRepository:
         query = {"path": path}
         update = {"$set": {"features": features}}
         return await self._db.update_one(self.file_tracking_collection, query, update)
+
+    async def delete_file_data(self, path):
+        query = {"path": path}
+        return await self._db.delete_one(self.file_tracking_collection, query)

@@ -3,5 +3,6 @@ __pycache__/
 images/
 .DS_Store
 venv
+runs/
 
 cluster_summary.csv

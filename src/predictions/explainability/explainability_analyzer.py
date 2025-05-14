@@ -38,7 +38,8 @@ class ExplainabilityAnalyzer:
             shap_values = explainer.shap_values(X)
 
             title_suffix = f"Committer: {committer}"
-            self.model_plotter.plot_shap_summary(shap_values, X, self.feature_names, title=title_suffix)
+            self.model_plotter.plot_shap_summary(shap_values, X, self.feature_names, title=title_suffix,
+                                                 filename=f"top_errors_shap_summary_{committer}.png")
             self.model_plotter.plot_shap_bar(shap_values[0], self.feature_names, title=title_suffix + " (bar)")
 
 
@@ -47,7 +48,7 @@ class ExplainabilityAnalyzer:
         errors_df["top_dir"] = errors_df["path"].str.split("/").str[0].fillna("root")
 
         top_errors = errors_df.sort_values("abs_error", ascending=False).head(top_n)
-        print(top_errors[["path", "date", "actual", "pred", "residual", "abs_error"]])
+        print(top_errors[["path", "date", "actual", "pred", "residual"]])
 
         mae_by_ext = errors_df.groupby("extension")["abs_error"].mean().sort_values(ascending=False).head(top_n)
         mae_by_dir = errors_df.groupby("top_dir")["abs_error"].mean().sort_values(ascending=False).head(top_n)

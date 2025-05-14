@@ -125,12 +125,17 @@ class ModelPlotter(Plotter):
         plt.pie(counts, labels=counts.index, autopct="%1.1f%%", startangle=140)
         self.save_plot("error_types_pie.png")
 
-    def plot_shap_summary(self, shap_values, X, feature_names):
+    def plot_shap_summary(self, shap_values, X, feature_names, title: str = None,
+                          filename: str = "top_errors_shap_summary.png"):
         shap.summary_plot(shap_values, features=X, feature_names=feature_names, show=False)
         plt.tight_layout()
-        self.save_plot("top_errors_shap_summary.png")
+        if title:
+            plt.title(title)
+        self.save_plot(filename)
 
-    def plot_shap_bar(self, shap_values_row, feature_names):
+    def plot_shap_bar(self, shap_values_row, feature_names, title: str = None):
         shap.bar_plot(shap_values_row, feature_names=feature_names, show=False)
         plt.tight_layout()
+        if title:
+            plt.title(title)
         self.save_plot("top1_shap_bar.png")

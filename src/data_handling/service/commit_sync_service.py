@@ -15,8 +15,9 @@ class CommitSyncService:
         self.commit_repo = CommitRepository(repo)
         self.base_url = f'https://api.github.com/repos/{repo}'
 
-    async def sync_commit_list(self, update: bool = False):
+    async def sync_commit_list(self, update: bool = False, batch_size: int = 500):
         url = f'{self.base_url}/commits?per_page={self.RESULTS_PER_PAGE}'
+        buffer = []
 
         async for page, headers in self.http_client.paginate(url):
             if update:
@@ -24,22 +25,23 @@ class CommitSyncService:
                 for commit in page:
                     if not await self.commit_repo.find_commit(commit['sha'], full=False):
                         new_commits.append(commit)
-                        
-
-                if not new_commits:
-                    self.logger.info("No new commits found on this page, stopping pagination.")
-                    break
-
-                await self.commit_repo.insert_new_commits(new_commits, full=False)
+                buffer.extend(new_commits)
             else:
-                await self.commit_repo.insert_new_commits(page, full=False)
+                buffer.extend(page)
+            
+            if len(buffer) >= batch_size:
+                await self.commit_repo.insert_new_commits(buffer, full=False)
+                buffer.clear()
+        
+        if buffer:
+            await self.commit_repo.insert_new_commits(buffer, full=False)
 
     async def get_commit_info(self, sha: str) -> tuple[dict, set[str]]:
         data, _ = await self.http_client.get(f'{self.base_url}/commits/{sha}')
         paths = {f['filename'] for f in data.get('files', [])}
         return data, paths
 
-    async def sync_commit_details(self, batch_size: int = 200):
+    async def sync_commit_details(self, batch_size: int = 500):
         list_shas = await self.commit_repo.get_all_shas(full=False)
         full_info_shas = await self.commit_repo.get_all_shas(full=True)
         missing_shas = list_shas - full_info_shas

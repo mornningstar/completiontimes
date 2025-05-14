@@ -48,17 +48,17 @@ async def process_project(project):
 
         file_repo = FileRepository(project_name)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
-        engineer = FileFeatureEngineer(file_repo, plotter, threshold=0.05, consecutive_days=5)
+        engineer = FileFeatureEngineer(file_repo, plotter, threshold=0.05, consecutive_days=14)
         
         logging.info(f"Running feature engineering for project: {project_name}")
         file_features = await engineer.run()
         logging.info(f"Finished feature engineering for project: {project_name}")
 
         for model in models:
-            logging.info(f"Using {model.__class__.__name__}")
+            logging.info(f"Using {model}")
             file_model_trainer = FileModelTrainer(project_name, model, images_dir=images_dir, output_dir=models_dir)
             file_model_trainer.train_and_evaluate(file_features)
-            result = file_model_trainer.predict_unlabeled_files(file_features)
+            file_model_trainer.predict_unlabeled_files(file_features)
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))

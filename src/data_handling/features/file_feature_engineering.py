@@ -171,12 +171,8 @@ class FileFeatureEngineer:
 
             return ratio
 
-        df["normalized_early_growth"] = (
-            df.groupby("path").apply(early_growth_ratio)
-            .reset_index(level=0, drop=True)
-            #.reindex(df["path"].values)
-            #.values
-        )
+        growth = df.groupby("path").apply(early_growth_ratio)
+        df["normalized_early_growth"] = df["path"].map(growth)
 
         df["recent_contribution_ratio"] = (
             df.groupby("path").apply(compute_ratio).reset_index(level=0, drop=True)
@@ -258,11 +254,9 @@ class FileFeatureEngineer:
             group = group.copy().sort_values("date")
 
             # Strategy 1: Detect consecutive low-change commits
-            pct = group["percentage_change"].abs().fillna(0)
-            sum_pct = pct.rolling(window=consecutive_days,
-                                  min_periods=consecutive_days).sum()
-
-            valid = sum_pct[sum_pct < threshold]
+            pct = group["percentage_change"].abs().fillna(np.inf)
+            rolling_max_pct = pct.rolling(window=consecutive_days, min_periods=consecutive_days).max()
+            valid = rolling_max_pct[rolling_max_pct < threshold]
 
             if not valid.empty:
                 # Find the corresponding date in the original group

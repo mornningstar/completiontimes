@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiohttp import ClientResponseError
@@ -18,19 +19,18 @@ class FileHistoryService:
         self.file_repo = FileRepository(self.repo)
         self.base_url = f'https://api.github.com/repos/{self.repo}'
         self.commit_service = CommitSyncService(github_client, repo)
-    
+
+        self.visited_paths: set[str] = set()
+
     async def build_file_history(self, file_path: str, update: bool = False):
         full_history = []
-        written_shas = set()
-
-        if update:
-            existing = await self.file_repo.find_file_data(file_path)
-            if existing and existing.get('commit_history'):
-                for entry in existing['commit_history']:
-                    full_history.append(entry)
-                    written_shas.add(entry['sha'])
-
         url = f"{self.base_url}/commits?path={file_path}&per_page={self.RESULTS_PER_PAGE}"
+        skipped = 0
+        
+        if file_path in self.visited_paths:
+            self.logger.debug(f"Already visited {file_path}, skipping.")
+            doc = await self.file_repo.find_file_data(file_path)
+            return doc.get("commit_history", [])
 
         while url:
             commits, headers = await self.http_client.get(url)
@@ -42,26 +42,28 @@ class FileHistoryService:
             for commit in commits:
                 sha = commit['sha']
 
-                if sha in written_shas:
+                if update and await self.file_repo.has_commit_for_file(file_path, sha):
+                    self.logger.debug(f"Skipping already stored commit {sha} for {file_path}")
                     continue
 
                 size_or_status = await self.get_size_or_status(file_path, sha)
 
                 if size_or_status == 'file_not_found':
-                    renamed, new_path, renamed_history = await self._handle_rename(file_path, sha)
+                    renamed, renamed_history = await self._handle_rename(file_path, sha)
 
                     if renamed:
-                        file_path = new_path
-                        for entry in renamed_history:
-                            if entry['sha'] not in written_shas:
-                                full_history.append(entry)
-                                written_shas.add(entry['sha'])
-                                
+                        full_history.extend(renamed_history)
+                        # TODO: currently discards the rename commit itself
+                        self.logger.info(f"Rename detected at {sha} for {file_path} — see commit details below:")
+                        commit_detail = await self.commit_service.commit_repo.find_commit(sha, full=True)
+                        for f in commit_detail.get("files", []):
+                            if f["status"] == "renamed":
+                                self.logger.info(f)
+
                         continue
                     else:
-                        # File deleted: record size 0
                         size_or_status = 0
-                
+
                 if size_or_status in ('unexpected_response', 'is_directory', 'is_symlink'):
                     self.logger.warning(f"Skipping commit {sha} for file {file_path} due to: {size_or_status}")
                     continue
@@ -73,22 +75,16 @@ class FileHistoryService:
                                  or commit['commit']['committer']['name'],
                     'size': size_or_status
                 }
+
                 full_history.append(entry)
-                written_shas.add(sha)
 
             next_url = await self.http_client.get_next_link(headers)
-            if not next_url:
-                break
             url = next_url
-
-        if update:
-            if full_history:
-                await self.file_repo.update_file_data(file_path, file_path, full_history, upsert=True)
-                self.logger.info(f"Updated history for {file_path} with {len(full_history)} entries")
-        else:
-            if full_history:
-                await self.file_repo.insert_file_with_history(file_path, full_history)
-                self.logger.info(f"Inserted history for {file_path} with {len(full_history)} entries")
+        
+        if skipped > 0:
+            self.logger.info(f"{skipped} commits skipped (already stored) for {file_path}")
+        
+        self.visited_paths.add(file_path)
 
         return full_history
 
@@ -116,22 +112,23 @@ class FileHistoryService:
         """Helper to detect rename/deletion in a missing-file commit"""
         commit_detail = await self.commit_service.commit_repo.find_commit(sha, full=True)
         for file in commit_detail.get('files', []):
-            if file['status'] == 'renamed' and file.get('previous_filename'):
+            if file['status'] == 'renamed' and file.get('previous_filename') and file['filename'] == file_path:
                 old_path = file['previous_filename']
-                new_path = file['filename']
+
                 # Recursively pull history for old path
                 old_hist = await self.build_file_history(old_path, update=False)
-                return True, new_path, old_hist
+                await self.file_repo.delete_file_data(old_path)
+                return True, old_hist
             if file['status'] == 'removed' and file['filename'] == file_path:
-                return False, file_path, []
-        return False, file_path, []
+                return False, []
+        return False, []
 
     async def collect_all_paths_from_commits(self) -> list[str]:
         """
         Scan CommitRepository (full=True) once and store every unique path
         into FileRepository. Returns the list of paths.
         """
-        commits = await self.commit_service.commit_repo.find_all(full=True)
+        commits = await self.commit_service.commit_repo.get_all(full=True)
 
         unique_paths = set()
         for commit in commits:
@@ -146,9 +143,23 @@ class FileHistoryService:
         )
         return list(unique_paths)
 
-    async def sync_all_file_histories(self, update: bool = False):
+    async def sync_all_file_histories(self, update: bool = False, max_concurrency: int = 10):
         paths = await self.file_repo.get_all()
-        for file in paths:
-            await self.build_file_history(file['path'], update=update)
+        sem = asyncio.BoundedSemaphore(max_concurrency)
+
+        async def worker(path):
+            async with sem:
+                try:
+                    history = await self.build_file_history(path, update=update)
+                    if history:
+                        if update:
+                            await self.file_repo.append_commit_history(path, history, upsert=True)
+                        else:
+                            await self.file_repo.insert_file_with_history(path, history)
+                except Exception as e:
+                    self.logger.error(f"Sync failed for {path}: {e!r}")
+
+        tasks = [asyncio.create_task(worker(f['path'])) for f in paths]
+        await asyncio.gather(*tasks, return_exceptions=True)
 
         self.logger.info('All file histories synced.')

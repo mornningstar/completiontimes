@@ -18,7 +18,8 @@ class SyncOrchestrator:
     async def run(self):
         await self.http_client.open()
         await AsyncDatabase.initialize()
-        update = await self.commit_service.commit_repo.find_any(full=False) is not None
+        result = await self.commit_service.commit_repo.find_any(full=False)
+        update = result is not None
 
         try:
             # ---- commit side ----

@@ -61,8 +61,8 @@ class AsyncDatabase:
         return await cursor.to_list(length=None)
 
     @staticmethod
-    async def find_one(collection, query):
-        return await AsyncDatabase.DATABASE[collection].find_one(query)
+    async def find_one(collection, query, projection=None):
+        return await AsyncDatabase.DATABASE[collection].find_one(query, projection=projection)
 
     @staticmethod
     async def update_one(collection, filter_query, update_query, upsert=False):

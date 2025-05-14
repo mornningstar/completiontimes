@@ -17,7 +17,6 @@ class RandomForestModel(BaseModel):
 
         if param_grid is None:
             param_grid = {
-                #{
                     # if bootstrap true -> max_samples is allowed, otherwise not
                     'bootstrap': [True],
                     'max_samples': [None, 0.7, 0.85],
@@ -26,17 +25,6 @@ class RandomForestModel(BaseModel):
                     'min_samples_split': [2, 5, 10],
                     'min_samples_leaf': [1, 2, 4],
                     'max_features': ['sqrt', 'log2', 0.3, 0.5],
-                #},
-                #{
-                #    # If bootstrap false -> max_samples must be None
-                #    'bootstrap': [False],
-                #    'max_samples': [None],
-                #    'n_estimators': [100, 200, 300],
-                #    'max_depth': [10, 15, 25, None],
-                #    'min_samples_split': [2, 5, 10],
-                #    'min_samples_leaf': [1, 2, 4],
-                #    'max_features': ['sqrt', 'log2', 0.3, 0.5],
-                #}
             }
 
         self.logger.info("Tuning with parameter grid:")
