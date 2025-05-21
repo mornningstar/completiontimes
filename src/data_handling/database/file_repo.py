@@ -69,3 +69,9 @@ class FileRepository:
     async def delete_file_data(self, path):
         query = {"path": path}
         return await self._db.delete_one(self.file_tracking_collection, query)
+
+    async def find_existing_paths(self, paths: set[str]) -> list[str]:
+        results = await self._db.find(self.file_tracking_collection,
+                                      {"path": {"$in": list(paths)}},
+                                      {"path": 1})
+        return [result["path"] for result in results]

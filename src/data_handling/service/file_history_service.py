@@ -21,11 +21,11 @@ class FileHistoryService:
         self.commit_service = CommitSyncService(github_client, repo)
 
         self.visited_paths: set[str] = set()
+        self.failed_requests = set() # cache requests for files with SHA that yield a 404
 
     async def build_file_history(self, file_path: str, update: bool = False):
         full_history = []
         url = f"{self.base_url}/commits?path={file_path}&per_page={self.RESULTS_PER_PAGE}"
-        skipped = 0
         
         if file_path in self.visited_paths:
             self.logger.debug(f"Already visited {file_path}, skipping.")
@@ -33,6 +33,7 @@ class FileHistoryService:
             return doc.get("commit_history", [])
 
         while url:
+            new_entries_in_page = 0
             commits, headers = await self.http_client.get(url)
 
             if not commits:
@@ -45,6 +46,8 @@ class FileHistoryService:
                 if update and await self.file_repo.has_commit_for_file(file_path, sha):
                     self.logger.debug(f"Skipping already stored commit {sha} for {file_path}")
                     continue
+
+                new_entries_in_page += 1
 
                 size_or_status = await self.get_size_or_status(file_path, sha)
 
@@ -62,33 +65,53 @@ class FileHistoryService:
 
                         continue
                     else:
+                        self.logger.debug(f"{file_path} was deleted at commit {sha}")
                         size_or_status = 0
 
                 if size_or_status in ('unexpected_response', 'is_directory', 'is_symlink'):
                     self.logger.warning(f"Skipping commit {sha} for file {file_path} due to: {size_or_status}")
                     continue
 
+                commit_detail = await self.commit_service.commit_repo.find_commit(sha, full=True)
+                stats = next(
+                    (f for f in commit_detail.get("files", [])
+                     if f["filename"] == file_path),
+                    None
+                )
+
+                additions = stats.get("additions", 0) if stats else 0
+                deletions = stats.get("deletions", 0) if stats else 0
+                changes = stats.get("changes", 0) if stats else 0
+
                 entry = {
                     'sha': sha,
                     'date': commit['commit']['author']['date'],
                     'committer': (commit.get('committer') or {}).get('login')
                                  or commit['commit']['committer']['name'],
-                    'size': size_or_status
+                    'size': size_or_status,
+                    'additions': additions,
+                    'deletions': deletions,
+                    'total_changes': changes
                 }
 
                 full_history.append(entry)
+            
+            if update and new_entries_in_page == 0:
+                self.logger.info(f"No new entries for {file_path} found on a full page. Stopping early...")
+                break
 
-            next_url = await self.http_client.get_next_link(headers)
+            next_url = self.http_client.get_next_link(headers)
             url = next_url
-        
-        if skipped > 0:
-            self.logger.info(f"{skipped} commits skipped (already stored) for {file_path}")
         
         self.visited_paths.add(file_path)
 
         return full_history
 
     async def get_size_or_status(self, file_path: str, sha: str):
+        cache_key = (file_path, sha)
+        if cache_key in self.failed_requests:
+            return 'file_not_found'
+
         try:
             url = f"{self.base_url}/contents/{file_path}?ref={sha}"
             response, _ = await self.http_client.get(url)
@@ -105,6 +128,7 @@ class FileHistoryService:
             return 'unexpected_response'
         except ClientResponseError as e:
             if e.status == 404:
+                self.failed_requests.add(cache_key)
                 return 'file_not_found'
             raise
 
@@ -137,9 +161,12 @@ class FileHistoryService:
                     continue
                 unique_paths.add(file["filename"])
 
+        existing_paths = await self.file_repo.find_existing_paths(unique_paths)
+        new_paths = unique_paths - set(existing_paths)
+
         # bulk-insert if they’re not already there
         await self.file_repo.insert_new_files(
-            [{"path": p} for p in unique_paths if not await self.file_repo.find_file_data(p)]
+            [{"path": p} for p in new_paths]
         )
         return list(unique_paths)
 
@@ -160,6 +187,11 @@ class FileHistoryService:
                     self.logger.error(f"Sync failed for {path}: {e!r}")
 
         tasks = [asyncio.create_task(worker(f['path'])) for f in paths]
-        await asyncio.gather(*tasks, return_exceptions=True)
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, Exception):
+                print(f"Worker failed with: {result}")
 
         self.logger.info('All file histories synced.')

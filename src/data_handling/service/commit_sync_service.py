@@ -18,6 +18,7 @@ class CommitSyncService:
     async def sync_commit_list(self, update: bool = False, batch_size: int = 500):
         url = f'{self.base_url}/commits?per_page={self.RESULTS_PER_PAGE}'
         buffer = []
+        counter = 0
 
         async for page, headers in self.http_client.paginate(url):
             if update:
@@ -26,15 +27,23 @@ class CommitSyncService:
                     if not await self.commit_repo.find_commit(commit['sha'], full=False):
                         new_commits.append(commit)
                 buffer.extend(new_commits)
+
+                if not new_commits:
+                    self.logger.info("Encountered full page of already-synced commits — stopping early.")
+                    break
             else:
                 buffer.extend(page)
-            
+
             if len(buffer) >= batch_size:
+                counter += len(buffer)
                 await self.commit_repo.insert_new_commits(buffer, full=False)
                 buffer.clear()
         
         if buffer:
+            counter += len(buffer)
             await self.commit_repo.insert_new_commits(buffer, full=False)
+
+        self.logger.info(f"Found {counter} new commits...")
 
     async def get_commit_info(self, sha: str) -> tuple[dict, set[str]]:
         data, _ = await self.http_client.get(f'{self.base_url}/commits/{sha}')
@@ -45,6 +54,10 @@ class CommitSyncService:
         list_shas = await self.commit_repo.get_all_shas(full=False)
         full_info_shas = await self.commit_repo.get_all_shas(full=True)
         missing_shas = list_shas - full_info_shas
+
+        if len(missing_shas) == 0:
+            self.logger.info("No missing commit details. Skipping.")
+            return
 
         self.logger.info('Getting commit info for {} commits'.format(len(missing_shas)))
 

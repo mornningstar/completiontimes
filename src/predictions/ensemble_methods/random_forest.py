@@ -25,6 +25,7 @@ class RandomForestModel(BaseModel):
                     'min_samples_split': [2, 5, 10],
                     'min_samples_leaf': [1, 2, 4],
                     'max_features': ['sqrt', 'log2', 0.3, 0.5],
+                    'min_impurity_decrease': [0.0, 0.01, 0.05]
             }
 
         self.logger.info("Tuning with parameter grid:")

@@ -10,6 +10,7 @@ from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.file_repo import FileRepository
 from src.data_handling.features.file_feature_engineering import FileFeatureEngineer
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
+from src.github.token_bucket import TokenBucket
 from src.predictions.file_model_trainer import FileModelTrainer
 from src.visualisations.model_plotting import ModelPlotter
 
@@ -26,13 +27,13 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-async def process_project(project):
+async def process_project(project, token_bucket: TokenBucket = None):
     project_name = project['name']
     models = project.get('models', [])
 
     #api_connection = APIConnectionAsync.create(project_name)
-    token = CONFIG[0]['github_access_token']
-    orchestrator = SyncOrchestrator(token, project_name)
+    auth_token = CONFIG[0]['github_access_token']
+    orchestrator = SyncOrchestrator(auth_token, project_name, token_bucket)
 
     try:
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -45,14 +46,15 @@ async def process_project(project):
 
         logging.info(f"Starting processing for project: {project_name}")
         await orchestrator.run()
+        logging.debug("Finished calling synchronised orchestrator")
 
         file_repo = FileRepository(project_name)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
         engineer = FileFeatureEngineer(file_repo, plotter, threshold=0.05, consecutive_days=14)
         
-        logging.info(f"Running feature engineering for project: {project_name}")
+        logging.debug(f"Running feature engineering for project: {project_name}")
         file_features = await engineer.run()
-        logging.info(f"Finished feature engineering for project: {project_name}")
+        logging.debug(f"Finished feature engineering for project: {project_name}")
 
         for model in models:
             logging.info(f"Using {model}")
@@ -67,7 +69,8 @@ async def process_project(project):
 
 
 async def main():
-    tasks = [process_project(project) for project in PROJECTS]
+    shared_token_bucket = TokenBucket()
+    tasks = [process_project(project, shared_token_bucket) for project in PROJECTS]
     await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
