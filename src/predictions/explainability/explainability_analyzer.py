@@ -54,6 +54,8 @@ class ExplainabilityAnalyzer:
         mae_by_dir = errors_df.groupby("top_dir")["abs_error"].mean().sort_values(ascending=False).head(top_n)
         mae_by_reason = errors_df.groupby("completion_reason")["abs_error"].mean().sort_values(ascending=False)
         mae_by_committer = errors_df.groupby("committer_grouped")["abs_error"].mean().sort_values(ascending=False)
+        mae_by_completion_days_bins = (errors_df.groupby("true_bin", observed=False)["abs_error"].mean()
+                                       .sort_values(ascending=False))
 
         self.model_plotter.plot_bar(mae_by_ext, title="MAE per file type", xlabel="File Extension", ylabel="MAE")
         self.model_plotter.plot_bar(mae_by_dir, title="MAE per top level directory", xlabel="Directory",
@@ -62,3 +64,5 @@ class ExplainabilityAnalyzer:
                                     ylabel="MAE", filename="mae_per_completion_reason.png")
         self.model_plotter.plot_bar(mae_by_committer, title="MAE per Committer", xlabel="Committer", ylabel="MAE",
                                     filename="mae_per_committer.png")
+        self.model_plotter.plot_bar(mae_by_completion_days_bins, title="MAE per actual completion days",
+                                    xlabel="Completion days bins", ylabel="MAE", filename="mae_per_completion_bins.png")

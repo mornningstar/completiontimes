@@ -134,8 +134,9 @@ class ModelPlotter(Plotter):
         self.save_plot(filename)
 
     def plot_shap_bar(self, shap_values_row, feature_names, title: str = None):
+        self._init_plot()
         shap.bar_plot(shap_values_row, feature_names=feature_names, show=False)
         plt.tight_layout()
         if title:
             plt.title(title)
-        self.save_plot("top1_shap_bar.png")
+        self.save_plot("top_shap_bar.png")

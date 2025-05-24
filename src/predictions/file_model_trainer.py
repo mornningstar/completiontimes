@@ -46,8 +46,8 @@ class FileModelTrainer:
 
         return [col for col in file_data_df.select_dtypes(include=np.number).columns if col not in drop_cols]
 
-    def train(self, x_train, y_train):
-        self.model.train(x_train, y_train)
+    def train(self, x_train, y_train, groups=None):
+        self.model.train(x_train, y_train, groups=groups)
 
     def evaluate(self, x_test, y_test, test_df):
         y_pred_log = self.model.evaluate(x_test, y_test)
@@ -86,20 +86,20 @@ class FileModelTrainer:
         return y_pred, mse, mae, rmse, errors_df
 
     def train_and_evaluate(self, file_data_df):
-        print(file_data_df[:2])
-        file_data_df = file_data_df.groupby('path').filter(lambda g: len(g) >= 5)
-
         train_df, test_df = self.split_by_file(file_data_df)
         feature_cols = self.get_feature_cols(train_df)
         self.logger.info(f"Used feature columns: {feature_cols}")
 
         x_train = train_df[feature_cols].values
+        self.logger.debug(f"Length of x_train: {len(x_train)}")
         y_train_log = np.log1p(train_df["days_until_completion"].values)
+        self.logger.debug(f"Length of y_train: {len(y_train_log)}")
         x_test = test_df[feature_cols].values
         y_test_log = np.log1p(test_df["days_until_completion"].values)
 
-        #Training
-        self.train(x_train, y_train_log)
+        # Training
+        groups = train_df["path"].values
+        self.train(x_train, y_train_log, groups=groups)
 
         importances = self.model.get_feature_importances()
         if importances is not None:
@@ -133,7 +133,7 @@ class FileModelTrainer:
         feature_cols = self.get_feature_cols(unlabeled_df)
         self.logger.info(f"Predicting on {len(unlabeled_df)} unlabeled rows using features: {feature_cols}")
 
-        x_unlabeled = unlabeled_df[feature_cols].values
+        x_unlabeled = unlabeled_df[feature_cols]
 
         predictions = self.model.predict(x_unlabeled)
         predictions = np.clip(predictions, a_min=None, a_max=15) # expm1(15) ≈ 3.2 million days
@@ -153,6 +153,10 @@ class FileModelTrainer:
         errors_df["error_type"] = "ok"
         errors_df.loc[errors_df["residual"] > threshold, "error_type"] = "underestimated"
         errors_df.loc[errors_df["residual"] < -threshold, "error_type"] = "overestimated"
+
+        errors_df["true_bin"] = pd.cut(errors_df["actual"], bins=[0, 30, 90, 180, 365, 1000],
+                                       labels=["<30", "30–90", "90–180", "180–365", "365+"])
+
 
         error_counts = errors_df["error_type"].value_counts()
         self.logger.info("Error types:\n{}".format(error_counts))

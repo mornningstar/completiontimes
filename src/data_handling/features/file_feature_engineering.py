@@ -10,11 +10,8 @@ from src.visualisations.model_plotting import ModelPlotter
 
 class FileFeatureEngineer:
 
-    def __init__(self, file_repo: FileRepository, plotter: ModelPlotter, threshold, consecutive_days):
+    def __init__(self, file_repo: FileRepository, plotter: ModelPlotter):
         self.file_repo = file_repo
-        self.threshold = threshold
-        self.consecutive_days = consecutive_days
-
         self.plotter = plotter
         self.logging = logging.getLogger(self.__class__.__name__)
 
@@ -30,7 +27,10 @@ class FileFeatureEngineer:
                     "path": file_path,
                     "date": pd.to_datetime(commit['date']),
                     "size": commit['size'],
-                    "committer": commit['committer']
+                    "committer": commit['committer'],
+                    "lines_added": commit.get("additions", 0),
+                    "lines_deleted": commit.get("deletions", 0),
+                    "line_change": commit.get("total_changes", 0)
                 })
 
         return pd.DataFrame(rows).sort_values('date')
@@ -57,7 +57,7 @@ class FileFeatureEngineer:
         df["age_in_days"] = (df["date"] - first_commit).dt.days
 
         path_lower = df["path"].str.lower()
-        config_extensions = {"json", "yaml", "yml", "ini", "toml", "env", "cfg", "conf", "ini"}
+        config_extensions = {"json", "yaml", "yml", "ini", "toml", "env", "cfg", "conf"}
         source_code_exts = (".py", ".js", ".ts", ".rb", ".java", ".cpp", ".c", ".cs", ".go", ".rs", ".php", ".swift")
 
         df["is_config_file"] = df["file_extension"].isin(config_extensions)
@@ -72,10 +72,11 @@ class FileFeatureEngineer:
 
     def _add_time_series_stats(self, df, window=7, n=5):
         df["size"] = pd.to_numeric(df["size"], errors="coerce")
+        df["size_diff"] = df.groupby("path")["size"].diff().fillna(0)
         df.dropna(subset=["size"], inplace=True)
-        df["size_diff"] = df.groupby("path")["size"].diff().fillna(0).abs()
         df.sort_values(["path", "date"], inplace=True)
 
+        df["size_diff"] = df.groupby("path")["size"].diff().fillna(0)
         df["std_dev_size_diff"] = df.groupby("path")["size_diff"].transform("std").fillna(0)
 
         roll = df.groupby("path")["size"].rolling(window=window)
@@ -88,6 +89,9 @@ class FileFeatureEngineer:
         )
 
         df["cumulative_size"] = df.groupby("path")["size"].cumsum()
+        df["cum_lines_added"] = df.groupby("path")["lines_added"].cumsum()
+        df["cum_lines_deleted"] = df.groupby("path")["lines_deleted"].cumsum()
+        df["cum_line_change"] = df["cum_lines_added"] + df["cum_lines_deleted"]
         df["cumulative_mean"] = df.groupby("path")["size"].expanding().mean().reset_index(level=0, drop=True)
         df["cumulative_std"] = df.groupby("path")["size"].expanding().std().reset_index(level=0, drop=True)
 
@@ -113,6 +117,7 @@ class FileFeatureEngineer:
 
     def _add_commit_activity_features(self, df, windows: list[int]):
         df["total_commits"] = df.groupby("path").cumcount() + 1
+        df["commits_per_day_so_far"] = df["total_commits"] / (df["age_in_days"] + 1)
 
         for window in windows:
             df[f"commits_last_{window}d"] = df.groupby("path").apply(
@@ -129,9 +134,18 @@ class FileFeatureEngineer:
         )
 
         df["days_since_last_commit"] = df.groupby("path")["date"].diff().dt.days.fillna(0)
+        df["is_first_commit"] = df["days_since_last_commit"].isna().astype(int)
+        df["days_since_last_commit"].fillna(df["days_since_last_commit"].median(), inplace=True)
+
+        df["std_commit_interval"] = (
+            df.groupby("path")["days_since_last_commit"].expanding().std().reset_index(level=0, drop=True).fillna(0)
+        )
+
         df["avg_commit_interval"] = df.groupby("path")["days_since_last_commit"].transform("mean").fillna(0)
         df["last_3_mean"] = df[["lag_1_size", "lag_2_size", "lag_3_size"]].mean(axis=1)
         df["last_3_slope"] = df["lag_1_size"] - df["lag_3_size"]
+        df["last_5_slope"] = df["lag_1_size"] - df["lag_5_size"]
+        df["growth_acceleration"] = df["last_3_slope"] - df["last_5_slope"]
         df.replace([np.inf, -np.inf], 0, inplace=True)
 
         first = df.groupby("path")["date"].transform("min")
@@ -141,6 +155,7 @@ class FileFeatureEngineer:
         df = df.merge(active_day_counts.rename("active_days"), on="path", how="left")
         df["days_with_commits_ratio"] = (df["active_days"] / span_days).clip(0, 1).fillna(0)
         df.drop(columns=["active_days"], inplace=True)
+
 
         return df
 
@@ -152,32 +167,55 @@ class FileFeatureEngineer:
             return -np.sum(counts * np.log2(counts + 1e-10)) # 1e-10 for numerical stability
 
         df["interval_entropy"] = df.groupby("path")["commit_interval_days"].transform(entropy)
+        df["committer_entropy"] = df.groupby("path")["committer"].transform(entropy)
 
-        def early_growth_ratio(group, n=7):
-            sorted_group = group.sort_values("date")
-            size_diffs = sorted_group["size"].diff().fillna(0)
+        df["add_entropy"] = df.groupby("path")["lines_added"].transform(entropy)
+        df["deletions_entropy"] = df.groupby("path")["lines_deleted"].transform(entropy)
 
-            n = min(n, len(size_diffs))
-            early_sum = size_diffs.iloc[:n].sum()
-            total_growth = size_diffs.sum()
-            return early_sum / (total_growth + 1e-10)
+        df = self._add_normalized_early_growth(df, early_n=7)
+        df = self._add_recent_contribution_ratio(df, n=5)
 
-        def compute_ratio(group, n=5):
-            size_diff = group["size"].diff().fillna(0).abs()
-            total_growth = size_diff.cumsum()
-
-            recent_sum = size_diff.rolling(window=n, min_periods=1).sum()
-            ratio = (recent_sum / (total_growth + 1e-10)).clip(0, 1)
-
-            return ratio
-
-        growth = df.groupby("path").apply(early_growth_ratio)
-        df["normalized_early_growth"] = df["path"].map(growth)
-
-        df["recent_contribution_ratio"] = (
-            df.groupby("path").apply(compute_ratio).reset_index(level=0, drop=True)
+        df["commit_interval_std"] = (
+            df.groupby("path")["commit_interval_days"].transform("std").fillna(0)
         )
 
+        return df
+
+    def _add_normalized_early_growth(self, df, early_n=7):
+        df["early_growth"] = (
+            df.groupby("path")["size_diff"]
+            .transform(lambda x: x.rolling(window=early_n, min_periods=1).sum())
+        )
+
+        df["total_growth_so_far"] = df.groupby("path")["size_diff"].cumsum() + 1e-10  # Avoid div by 0
+
+        df["normalized_early_growth"] = (
+                df["early_growth"] / df["total_growth_so_far"]
+        ).clip(0, 1)
+
+        return df
+
+    def _add_recent_contribution_ratio(self, df, n=5):
+        df["recent_sum"] = (
+            df.groupby("path")["size_diff"]
+            .transform(lambda x: x.rolling(window=n, min_periods=1).sum())
+        )
+
+        df["recent_contribution_ratio"] = (df["recent_sum"] / df["total_growth_so_far"]).clip(0, 1)
+
+        return df
+
+    def _add_change_quality_features(self, df):
+        df["add_ratio"] = (
+                df["lines_added"] / df["line_change"].replace(0, np.nan)
+        ).fillna(0).clip(0, 1)
+
+        df["pure_addition"] = ((df["lines_added"] > 0) & (df["lines_deleted"] == 0)).astype(int)
+        df["pure_deletion"] = ((df["lines_deleted"] > 0) & (df["lines_added"] == 0)).astype(int)
+
+        df["pure_addition_count"] = df.groupby("path")["pure_addition"].cumsum()
+        df["pure_deletion_count"] = df.groupby("path")["pure_deletion"].cumsum()
+        
         return df
 
     def count_recent_commits(self, group, window_days=30):
@@ -185,7 +223,6 @@ class FileFeatureEngineer:
         result = []
         for i, current_date in enumerate(dates):
             window_start = current_date - pd.Timedelta(days=window_days)
-            # Nur die bisherigen Commits zählen (inkl. aktueller Zeile, wenn gewünscht)
             count = dates.iloc[:i].between(window_start, current_date).sum()
             result.append(count)
         return pd.Series(result, index=group.index)
@@ -196,6 +233,7 @@ class FileFeatureEngineer:
         df["contrib_x_entropy"] = df["recent_contribution_ratio"] * df["interval_entropy"]
         df["growth_x_age"] = df["recent_growth_ratio"] * df["age_in_days"]
         df["average_growth_commit"] = df["cumulative_size"] / df["total_commits"]
+        df["committer_x_interval_entropy"] = df["committer_entropy"] * df["interval_entropy"]
 
         return df
 
@@ -221,15 +259,17 @@ class FileFeatureEngineer:
         :param window: the defined window for lag and ema features
         :return:
         """
-        # Use File Extensions as Features
+        file_df = file_df.groupby("path").filter(lambda g: len(g) >= 5)
+
         file_df = self._add_metadata_features(file_df)
         file_df = self._add_time_series_stats(file_df, window=window)
         file_df = self._add_commit_activity_features(file_df, windows=[30, 90])
         file_df = self._add_temporal_dynamics_features(file_df)
         file_df = self._add_feature_interactions(file_df)
         file_df = self._add_committer_features(file_df)
+        file_df = self._add_change_quality_features(file_df)
 
-        file_df = self.add_completion_labels(file_df, self.threshold, self.consecutive_days)
+        file_df = self.add_completion_labels(file_df)
         file_df = self.add_days_until_completion(file_df)
 
         numeric_cols = [col for col in file_df.select_dtypes(include=[np.number]).columns
@@ -238,7 +278,35 @@ class FileFeatureEngineer:
 
         return file_df
 
-    def add_completion_labels(self, df, threshold, consecutive_days, idle_days_cutoff=180):
+    def _check_stable_line_change_window(self, group):
+        group = group.sort_values("date").reset_index(drop=True)
+        consecutive_commits = int(len(group) * 0.2)
+        commit_window = min(max(3, consecutive_commits), 14)
+
+        latest_valid_completion_date = None
+        
+        for i in range(len(group)):
+            current_line_change = group.loc[i, "line_change"]
+            median_change = group.loc[:i, "line_change"].median()
+            threshold = max(3, median_change * 0.15)
+
+            if current_line_change <= threshold:
+                remaining = len(group) - (i + 1)
+                window_size = min(commit_window, remaining)
+                if window_size == 0:
+                    continue
+
+                next_commits = group.iloc[i + 1: i + 1 + window_size]
+
+                if (next_commits["line_change"] < threshold).all():
+                    latest_valid_completion_date = next_commits.iloc[-1]["date"]
+
+        if latest_valid_completion_date:
+            return latest_valid_completion_date, "stable_line_change"
+
+        return None, None
+
+    def add_completion_labels(self, df):
         """
             Add a 'completion_date' column for each file based on two strategies:
             1. A stable pattern: percentage_change stays below threshold for consecutive_days commits
@@ -248,24 +316,22 @@ class FileFeatureEngineer:
         df['completion_date'] = pd.NaT
         df['completion_reason'] = None
 
+        df["date"] = pd.to_datetime(df["date"], utc=True).dt.tz_localize(None)
+
         now = pd.Timestamp.now().normalize()
 
+        project_cutoff = df["commit_interval_days"].replace(0, np.nan).dropna().quantile(0.95)
+        project_cutoff = int(np.clip(project_cutoff, 30, 365))
+        self.logging.info(f"Using project-wide inactivity cutoff of {project_cutoff} days")
+
         for path, group in df.groupby("path"):
-            group = group.copy().sort_values("date")
+            # Strategy 1
+            completion_date, reason = self._check_stable_line_change_window(group)
 
-            # Strategy 1: Detect consecutive low-change commits
-            pct = group["percentage_change"].abs().fillna(np.inf)
-            rolling_max_pct = pct.rolling(window=consecutive_days, min_periods=consecutive_days).max()
-            valid = rolling_max_pct[rolling_max_pct < threshold]
-
-            if not valid.empty:
-                # Find the corresponding date in the original group
-                completion_idx = valid.index[-1]
-                raw_date = group.loc[completion_idx, 'date']
-                completion_date = pd.Timestamp(raw_date).tz_localize(None).to_pydatetime()
-
+            if completion_date:
+                completion_date = pd.to_datetime(completion_date).tz_localize(None)
                 df.loc[df["path"] == path, "completion_date"] = completion_date
-                df.loc[df["path"] == path, "completion_reason"] = "stable_pattern"
+                df.loc[df["path"] == path, "completion_reason"] = reason
                 continue
 
             # Strategy 2: Explicit deletion (size = 0)
@@ -281,7 +347,7 @@ class FileFeatureEngineer:
             last_commit_date = last_commit_date.tz_localize(None).to_pydatetime()
             days_since_last_commit = (now - last_commit_date).days
 
-            if days_since_last_commit > idle_days_cutoff:
+            if days_since_last_commit > project_cutoff:
                 df.loc[df["path"] == path, "completion_date"] = last_commit_date
                 df.loc[df["path"] == path, "completion_reason"] = "idle_timeout"
 
@@ -289,6 +355,15 @@ class FileFeatureEngineer:
         total_files = df['path'].nunique()
         self.logging.info(
             f"Completed files: {num_completed_files} / {total_files} ({(num_completed_files / total_files * 100):.2f}%)")
+
+        strategy_counts = (
+            df[df['completion_reason'].notna()]
+            .groupby("path")
+            .first()["completion_reason"]
+            .value_counts()
+        )
+        for reason, count in strategy_counts.items():
+            self.logging.info(f"{reason}: {count} files")
 
         self.plotter.plot_completion_donut(num_completed_files, total_files)
 
@@ -326,13 +401,26 @@ class FileFeatureEngineer:
             features = group.reset_index().to_dict(orient="records")
             await self.file_repo.append_features_to_file(path, features, upsert=False)
 
-    async def run(self):
+    @staticmethod
+    def select_snapshots(df, every="7D"):
+        df = df.sort_values(["path", "date"])
+        df["snapshot_bin"] = df["date"].dt.floor(every)
+        latest_per_bin = (
+            df.groupby(["path", "snapshot_bin"])
+            .tail(1)
+            .reset_index(drop=True)
+            .drop(columns=["snapshot_bin"])
+        )
+        return latest_per_bin
+
+    async def run(self, source_directory: str):
         """
         Fetch all files, compute features, and save them back to the database.
         """
-
         file_df = await self.fetch_all_files()
+        file_df = file_df[file_df["path"].str.startswith(source_directory)].copy()
         file_features = self.calculate_metrics(file_df)
+        file_features = self.select_snapshots(file_features, every="7D")
 
         feature_cols = [col for col in file_features.select_dtypes(include="number").columns
                         if col not in ["days_until_completion", "size", "cumulative_size"]]
@@ -340,7 +428,5 @@ class FileFeatureEngineer:
         self.plotter.plot_feature_correlations(file_features[feature_cols], target_series)
 
         await self.save_features_to_db(file_features)
-
-
 
         return file_features

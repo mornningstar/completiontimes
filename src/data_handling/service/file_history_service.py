@@ -26,6 +26,12 @@ class FileHistoryService:
     async def build_file_history(self, file_path: str, update: bool = False):
         full_history = []
         url = f"{self.base_url}/commits?path={file_path}&per_page={self.RESULTS_PER_PAGE}"
+
+        known_shas = set()
+        if update:
+            doc = await self.file_repo.find_file_data(file_path)
+            if doc:
+                known_shas = {c["sha"] for c in doc.get("commit_history", [])}
         
         if file_path in self.visited_paths:
             self.logger.debug(f"Already visited {file_path}, skipping.")
@@ -43,7 +49,7 @@ class FileHistoryService:
             for commit in commits:
                 sha = commit['sha']
 
-                if update and await self.file_repo.has_commit_for_file(file_path, sha):
+                if update and sha in known_shas:
                     self.logger.debug(f"Skipping already stored commit {sha} for {file_path}")
                     continue
 
