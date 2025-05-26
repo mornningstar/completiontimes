@@ -10,10 +10,11 @@ from src.visualisations.model_plotting import ModelPlotter
 
 class FileFeatureEngineer:
 
-    def __init__(self, file_repo: FileRepository, plotter: ModelPlotter):
+    def __init__(self, file_repo: FileRepository, plotter: ModelPlotter, use_categorical: bool = False):
         self.file_repo = file_repo
         self.plotter = plotter
         self.logging = logging.getLogger(self.__class__.__name__)
+        self.use_categorical = use_categorical
 
     async def fetch_all_files(self):
 
@@ -45,8 +46,10 @@ class FileFeatureEngineer:
         ext_counts = df["file_extension"].value_counts()
         top_exts = ext_counts[(ext_counts >= 10) | (ext_counts.rank(method="min") <= 10)].index
         df["file_extension"] = df["file_extension"].apply(lambda x: x if x in top_exts else "other")
-        dummies = pd.get_dummies(df["file_extension"], prefix="ext")
-        df = pd.concat([df, dummies], axis=1)
+
+        if not self.use_categorical:
+            dummies = pd.get_dummies(df["file_extension"], prefix="ext")
+            df = pd.concat([df, dummies], axis=1)
 
         df["path_depth"] = df["path"].apply(lambda x: x.count("/"))
         df["in_test_dir"] = df["path"].str.lower().str.contains(r"/tests?/").astype(int)
@@ -81,14 +84,14 @@ class FileFeatureEngineer:
 
         roll = df.groupby("path")["size"].rolling(window=window)
         for stat in ["mean", "std", "max", "min", "median", "var"]:
-            df[f"rolling_{window}_{stat}"] = getattr(roll, stat)().reset_index(level=0, drop=True)
+            df[f"rolling_{window}_{stat}"] = getattr(roll.shift(1), stat)().reset_index(level=0, drop=True)
 
         df[f"ema_{window}"] = (
             df.groupby("path")["size"]
             .transform(lambda x: x.ewm(span=window, adjust=False).mean())
         )
 
-        df["cumulative_size"] = df.groupby("path")["size"].cumsum()
+        df["cumulative_size"] = df.groupby("path")["size"].shift(1).cumsum()
         df["cum_lines_added"] = df.groupby("path")["lines_added"].cumsum()
         df["cum_lines_deleted"] = df.groupby("path")["lines_deleted"].cumsum()
         df["cum_line_change"] = df["cum_lines_added"] + df["cum_lines_deleted"]
@@ -135,7 +138,9 @@ class FileFeatureEngineer:
 
         df["days_since_last_commit"] = df.groupby("path")["date"].diff().dt.days.fillna(0)
         df["is_first_commit"] = df["days_since_last_commit"].isna().astype(int)
-        df["days_since_last_commit"].fillna(df["days_since_last_commit"].median(), inplace=True)
+
+        median = df["days_since_last_commit"].median()
+        df["days_since_last_commit"] = df["days_since_last_commit"].fillna(median)
 
         df["std_commit_interval"] = (
             df.groupby("path")["days_since_last_commit"].expanding().std().reset_index(level=0, drop=True).fillna(0)
@@ -247,8 +252,10 @@ class FileFeatureEngineer:
                           f"{len(committer_counts)}")
 
         df["committer_grouped"] = df["committer"].apply(lambda x: x if x in frequent_committers else "other")
-        committer_dummies = pd.get_dummies(df["committer_grouped"], prefix="committer")
-        df = pd.concat([df, committer_dummies], axis=1)
+
+        if not self.use_categorical:
+            committer_dummies = pd.get_dummies(df["committer_grouped"], prefix="committer")
+            df = pd.concat([df, committer_dummies], axis=1)
 
         return df
 

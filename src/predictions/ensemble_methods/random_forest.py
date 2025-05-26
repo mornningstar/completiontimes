@@ -2,8 +2,9 @@ import pprint
 import time
 
 import optuna
+from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import GridSearchCV, cross_val_score
+from sklearn.model_selection import cross_val_score
 
 from src.predictions.base_model import BaseModel
 
@@ -13,9 +14,11 @@ class RandomForestModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, cv=5, scoring='neg_mean_squared_error', n_trials=150,
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=150,
                   timeout=None):
         self.logger.info("Starting hyperparameter tuning...")
+
+        splitter = GroupTimeSeriesSplit(n_splits=cv)
 
         def objective(trial):
             params = {
@@ -34,10 +37,10 @@ class RandomForestModel(BaseModel):
                 params['max_samples'] = None
 
             model = RandomForestRegressor(random_state=42, **params)
-            score = cross_val_score(model, x_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
+            score = cross_val_score(model, x_train, y_train, groups=groups, cv=splitter, scoring=scoring, n_jobs=-1)
             return score.mean()
     
-        study = optuna.create_study(direction='maximize' if 'neg' in scoring else 'minimize')
+        study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')
         start_time = time.time()
         study.optimize(objective, n_trials=n_trials, timeout=timeout)
         elapsed_time = time.time() - start_time
@@ -67,4 +70,3 @@ class RandomForestModel(BaseModel):
         if self.model is None:
             raise ValueError("Model is not trained yet.")
         return self.model.predict(x_test)
-

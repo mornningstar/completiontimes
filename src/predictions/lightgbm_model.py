@@ -4,9 +4,9 @@ import time
 import lightgbm
 import numpy as np
 import optuna
-from sklearn.metrics import mean_absolute_error
-from sklearn.model_selection import GroupKFold
 from lightgbm import LGBMRegressor
+from mlxtend.evaluate import GroupTimeSeriesSplit
+from sklearn.metrics import mean_absolute_error
 
 from src.predictions.base_model import BaseModel
 
@@ -17,7 +17,12 @@ class LightGBMModel(BaseModel):
         self.model = None
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, n_trials = 50, cv = 5):
+    def auto_tune(self, x_train, y_train, groups, n_trials = 150, cv = 5):
+        self.logger.info("Starting hyperparameter tuning...")
+
+        test_size = int(len(x_train) * 0.2)
+        splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+
         def objective(trial):
             trial_params = {
                 'n_estimators': trial.suggest_int('n_estimators', 200, 3000),
@@ -34,10 +39,9 @@ class LightGBMModel(BaseModel):
                 'random_state': 42
             }
 
-            cvs = GroupKFold(n_splits=cv)
             maes = []
 
-            for train_idx, valid_idx in cvs.split(x_train, y_train, groups=groups):
+            for train_idx, valid_idx in splitter.split(x_train, y_train, groups=groups):
                 X_train, X_val = x_train[train_idx], x_train[valid_idx]
                 Y_train, Y_val = y_train[train_idx], y_train[valid_idx]
                 m = LGBMRegressor(**trial_params, verbosity=-1)
