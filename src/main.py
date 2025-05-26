@@ -30,10 +30,11 @@ logging.basicConfig(
 async def process_project(project, token_bucket: TokenBucket = None):
     project_name = project['name']
     models = project.get('models', [])
+    flags = {cfg.get("use_categorical", False) for cfg in models}
+    get_newest = project.get('get_newest', True)
+    source_directory = project.get('source_directory', "src")
 
-    #api_connection = APIConnectionAsync.create(project_name)
     auth_token = CONFIG[0]['github_access_token']
-    orchestrator = SyncOrchestrator(auth_token, project_name, token_bucket)
 
     try:
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -43,24 +44,38 @@ async def process_project(project, token_bucket: TokenBucket = None):
         images_dir = os.path.join(run_output_dir, "images")
         logging.info("images_dir: {}".format(images_dir))
         models_dir = os.path.join(run_output_dir, "models")
-
-        logging.info(f"Starting processing for project: {project_name}")
-        await orchestrator.run()
-        logging.debug("Finished calling synchronised orchestrator")
+        
+        if get_newest:
+            orchestrator = SyncOrchestrator(auth_token, project_name, token_bucket)
+            logging.info(f"Starting processing for project: {project_name}")
+            await orchestrator.run()
+            logging.debug("Finished calling synchronised orchestrator")
+        else:
+            logging.info("Skipping fetch of new commit history")
 
         file_repo = FileRepository(project_name)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
-        engineer = FileFeatureEngineer(file_repo, plotter, threshold=0.05, consecutive_days=14)
-        
-        logging.debug(f"Running feature engineering for project: {project_name}")
-        file_features = await engineer.run()
-        logging.debug(f"Finished feature engineering for project: {project_name}")
+        await AsyncDatabase.initialize()
+
+        features_by_flag = {}
+
+        for flag in flags:
+            engineer = FileFeatureEngineer(file_repo, plotter, use_categorical=flag)
+            features = await engineer.run(source_directory=source_directory)
+            logging.debug(f"Length of file_features: {len(features)}")
+            features_by_flag[flag] = features
+            logging.debug(f"Finished feature engineering for project: {project_name}")
 
         for model in models:
-            logging.info(f"Using {model}")
-            file_model_trainer = FileModelTrainer(project_name, model, images_dir=images_dir, output_dir=models_dir)
-            file_model_trainer.train_and_evaluate(file_features)
-            file_model_trainer.predict_unlabeled_files(file_features)
+            model_class = model["class"]
+            flag = model.get("use_categorical", False)
+            features_to_use = features_by_flag[flag]
+
+            logging.info(f"Training {model_class.__name__} (use_categorical={flag})")
+
+            file_model_trainer = FileModelTrainer(project_name, model_class, images_dir=images_dir, output_dir=models_dir)
+            file_model_trainer.train_and_evaluate(features_to_use)
+            file_model_trainer.predict_unlabeled_files(features_to_use)
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))
