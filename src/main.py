@@ -4,14 +4,19 @@ import logging
 import os
 import platform
 
+import pandas as pd
+
 from config.config import CONFIG
 from config.projects import PROJECTS
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.file_repo import FileRepository
-from src.data_handling.features.file_feature_engineering import FileFeatureEngineer
+from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
+from src.data_handling.features.regression_feature_eng import RegressionFeatureEngineering
+from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
 from src.github.token_bucket import TokenBucket
 from src.predictions.file_model_trainer import FileModelTrainer
+from src.predictions.survival_model_trainer import SurvivalModelTrainer
 from src.visualisations.model_plotting import ModelPlotter
 
 if platform.system() == 'Windows':
@@ -27,10 +32,19 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+ENGINEER_BY_TYPE = {
+    "regression": RegressionFeatureEngineering,
+    "survival":   SurvivalFeatureEngineer,
+}
+
+TRAINER_BY_TYPE = {
+    "regression": FileModelTrainer,
+    "survival":   SurvivalModelTrainer,
+}
+
 async def process_project(project, token_bucket: TokenBucket = None):
     project_name = project['name']
     models = project.get('models', [])
-    flags = {cfg.get("use_categorical", False) for cfg in models}
     get_newest = project.get('get_newest', True)
     source_directory = project.get('source_directory', "src")
 
@@ -57,25 +71,31 @@ async def process_project(project, token_bucket: TokenBucket = None):
         plotter = ModelPlotter(project_name, images_dir=images_dir)
         await AsyncDatabase.initialize()
 
-        features_by_flag = {}
+        features_cache: dict[tuple[type, bool], pd.DataFrame] = {}
+        
+        for model_cfg in models:
+            model_cls = model_cfg["class"]
+            flag = model_cfg.get("use_categorical", False)
+            feature_type = model_cfg.get("feature_type", "regression")
+            eng_cls = ENGINEER_BY_TYPE[feature_type]
 
-        for flag in flags:
-            engineer = FileFeatureEngineer(file_repo, plotter, use_categorical=flag)
-            features = await engineer.run(source_directory=source_directory)
-            logging.debug(f"Length of file_features: {len(features)}")
-            features_by_flag[flag] = features
-            logging.debug(f"Finished feature engineering for project: {project_name}")
+            cache_key = (eng_cls, flag)
 
-        for model in models:
-            model_class = model["class"]
-            flag = model.get("use_categorical", False)
-            features_to_use = features_by_flag[flag]
+            if cache_key not in features_cache:
+                engineer = eng_cls(file_repo, plotter, use_categorical=flag)
+                runner = FeatureEngineerRunner(engineer)
+                engineered_df = await runner.run(source_directory=source_directory)
+                features_cache[cache_key] = engineered_df
+                logging.info(f"Computed features with {eng_cls.__name__} (use_categorical={flag}) "
+                             f"– rows={len(engineered_df)}")
 
-            logging.info(f"Training {model_class.__name__} (use_categorical={flag})")
+            features_to_use = features_cache[cache_key]
 
-            file_model_trainer = FileModelTrainer(project_name, model_class, images_dir=images_dir, output_dir=models_dir)
-            file_model_trainer.train_and_evaluate(features_to_use)
-            file_model_trainer.predict_unlabeled_files(features_to_use)
+            trainer_cls = TRAINER_BY_TYPE[feature_type]
+
+            trainer = trainer_cls(project_name, model_cls, images_dir=images_dir, output_dir=models_dir)
+            trainer.train_and_evaluate(features_to_use)
+            trainer.predict_unlabeled_files(features_to_use)
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))

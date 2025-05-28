@@ -31,7 +31,11 @@ PROJECTS = [
         'source_directory': 'fastapi',
         'get_newest': True,
         'models': [
-            {"class": RandomForestModel, "use_categorical": False},
+            {
+                "class": RandomForestModel, 
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
         ]
     },
     {
