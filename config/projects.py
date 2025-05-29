@@ -1,13 +1,21 @@
 from src.predictions.ensemble_methods.random_forest import RandomForestModel
 from src.predictions.lightgbm_model import LightGBMModel
+from src.predictions.survival_analysis.cox_timevarying import CoxTimeVaryingFitterModel
+from src.predictions.survival_analysis.random_surv_forest import RandomSurvivalForestModel
 
 PROJECTS = [
-    # {
-    #     'name': 'flairNLP/fundus',
-    #     'source_directory': 'src',
-    #     'get_newest': False,
-    #     'models': [LightGBMModel],
-    # },
+    {
+        'name': 'flairNLP/fundus',
+        'source_directory': 'src',
+        'get_newest': False,
+        'models': [
+            {
+                "class": CoxTimeVaryingFitterModel,
+                "use_categorical": False,
+                "feature_type": "survival"
+            },
+        ]
+    },
     # {
     #     'name': 'khoj-ai/khoj',
     #     'source_directory': 'src',
@@ -26,58 +34,58 @@ PROJECTS = [
     #     'get_newest': False,
     #     'models': [RandomForestModel],
     # },
-    {
-        'name': 'fastapi/fastapi',
-        'source_directory': 'fastapi',
-        'get_newest': True,
-        'models': [
-            {
-                "class": RandomForestModel, 
-                "use_categorical": False,
-                "feature_type": "regression"
-            },
-        ]
-    },
-    {
-        'name': 'pallets/flask',
-        'source_directory': 'src',
-        'get_newest': True,
-        'models': [],
-    },
-    {
-        'name': 'keras-team/keras',
-        'source_directory': 'keras',
-        'get_newest': True,
-        'models': [],
-    },
-    {
-        'name': 'tabler/tabler',
-        'source_directory': 'src',
-        'get_newest': True,
-        'models': [],
-    },
-    {
-        'name': 'google/material-design-lite',
-        'source_directory': 'src',
-        'get_newest': True,
-        'models': [],
-    },
-    {
-        'name': 'airbnb/kaldb',
-        'source_directory': 'astra',
-        'get_newest': True,
-        'models': [],
-    },
-    {
-        'name': 'slackhq/astra',
-        'source_directory': 'astra',
-        'get_newest': True,
-        'models': [],
-    },
-    {
-        'name': 'google/gson',
-        'source_directory': '',
-        'get_newest': True,
-        'models': [],
-    },
+    # {
+    #     'name': 'fastapi/fastapi',
+    #     'source_directory': 'fastapi',
+    #     'get_newest': True,
+    #     'models': [
+    #         {
+    #             "class": RandomForestModel,
+    #             "use_categorical": False,
+    #             "feature_type": "regression"
+    #         },
+    #     ]
+    # },
+    # {
+    #     'name': 'pallets/flask',
+    #     'source_directory': 'src',
+    #     'get_newest': True,
+    #     'models': [],
+    # },
+    # {
+    #     'name': 'keras-team/keras',
+    #     'source_directory': 'keras',
+    #     'get_newest': True,
+    #     'models': [],
+    # },
+    # {
+    #     'name': 'tabler/tabler',
+    #     'source_directory': 'src',
+    #     'get_newest': True,
+    #     'models': [],
+    # },
+    # {
+    #     'name': 'google/material-design-lite',
+    #     'source_directory': 'src',
+    #     'get_newest': True,
+    #     'models': [],
+    # },
+    # {
+    #     'name': 'airbnb/kaldb',
+    #     'source_directory': 'astra',
+    #     'get_newest': True,
+    #     'models': [],
+    # },
+    # {
+    #     'name': 'slackhq/astra',
+    #     'source_directory': 'astra',
+    #     'get_newest': True,
+    #     'models': [],
+    # },
+    # {
+    #     'name': 'google/gson',
+    #     'source_directory': '',
+    #     'get_newest': True,
+    #     'models': [],
+    # },
 ]

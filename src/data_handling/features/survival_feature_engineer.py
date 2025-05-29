@@ -13,39 +13,82 @@ class SurvivalFeatureEngineer(BaseFeatureEngineer):
 
     @staticmethod
     def get_target_columns():
-        return ["duration", "event"]
+        return ["start", "stop", "event"]
 
-    def calculate_metrics(self, df, window = 7):
+    def calculate_metrics(self, df, window = 7, is_static: bool = False):
         df = super().calculate_metrics(df)
-        df = self._add_survival_targets(df)
 
-        numeric_cols = [c for c in df.select_dtypes("number").columns if c not in ["duration", "event"]]
-        df[numeric_cols] = df[numeric_cols].fillna(0.0)
+        if is_static:
+            out = self._add_survival_targets_static(df)
+        else:
+            out = self._add_survival_targets_time_varying(df)
 
-        return df
+        # fill NaNs on the one you’re returning:
+        nums = [c for c in out.select_dtypes(include="number").columns
+                if c not in self.get_target_columns()]
+        out[nums] = out[nums].fillna(0.0)
 
-    def _add_survival_targets(self, df):
+        return out
+
+    def _add_survival_targets_static(self, df):
+        """
+            One row per path with columns:
+               duration – days from first commit to observed end-point
+               event    – 1 if a terminal completion occurred, 0 if censored
+        """
+        snap_num = self.collapse_to_first_last(df, base_cols=["size"])
+        snap_dates = (
+            df.sort_values(["path", "date"])
+            .groupby("path")
+            .agg(
+                first_commit_date=("date", "first"),
+                last_commit_date=("date", "last"),
+                completion_date=("completion_date", "last"),
+                completion_reason=("completion_reason", "last")
+            )
+            .reset_index()
+        )
+        snap = snap_num.merge(snap_dates, on="path", how="inner")
+
         today = pd.Timestamp.utcnow().normalize()
-        df = df.sort_values(["path", "date"])
+        is_event = snap["completion_reason"].isin(["stable_line_change", "idle_timeout"])
+        end_date = snap["completion_date"].where(is_event, today)
 
-        df["end_date"] = df.groupby("path")["date"].shift(-1)
-        df["end_date"] = df["end_date"].where(df["end_date"].notna(), df["completion_date"])
-        df["end_date"] = df["end_date"].fillna(today)
+        snap["duration"] = (end_date - snap["first_commit_date"]).dt.days.clip(lower=0)
+        snap["event"] = is_event.astype(int)
 
-        df["duration"] = (df["end_date"] - df["date"]).dt.days
+        return snap
 
-        df["event"] = 0
 
-        df["is_last"] = df.groupby("path")["date"].transform("max") == df["date"]
-        df["event"] = (
-                df["is_last"] & df["completion_reason"].isin(["stable_line_change", "idle_timeout"])
-        ).astype(int)
-        df.drop(columns="is_last", inplace=True)
+    def _add_survival_targets_time_varying(self, df):
+        """
+        Transforms each record into counting-process intervals for a time-dependent Cox model.
+        :param df:
+        :return:
+        """
+        today = pd.Timestamp.utcnow().normalize().tz_localize(None)
+        df = df.sort_values(["path", "date"]).copy()
 
-        mask_completed = df["date"] == df["completion_date"]
-        df.loc[mask_completed, "event"] = df.loc[mask_completed, "completion_reason"].isin(
-            ["stable_line_change", "idle_timeout"]).astype(int)
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["completion_date"] = pd.to_datetime(df["completion_date"], errors="coerce")
 
-        df = df[df["duration"] >= 0].copy()
-        
+        df["end_date"] = df["completion_date"].fillna(today)
+        df["next_date"] = df.groupby("path")["date"].shift(-1)
+
+        df["start_date"] = df["date"]
+        df["stop_date"] = df["next_date"].fillna(df["end_date"])
+
+        first_commit = df.groupby("path")["date"].transform('min')
+        df["start"] = (df["start_date"] - first_commit).dt.days.clip(lower=0)
+        df["stop"] = (df["stop_date"] - first_commit).dt.days.clip(lower=0)
+
+        df["event"] = ((df["stop_date"] == df["completion_date"]) &
+                       df["completion_reason"].isin(["stable_line_change", "idle_timeout"]))
+        df["event"] = df["event"].astype(int)
+
+        df.drop(columns=["start_date", "stop_date", "end_date", "next_date", "date", "completion_date"],
+                inplace=True, errors="ignore")
+
+        df = df[df["stop"] > df["start"]].copy()
+        df.reset_index(drop=True, inplace=True)
         return df

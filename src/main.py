@@ -95,7 +95,7 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
             trainer = trainer_cls(project_name, model_cls, images_dir=images_dir, output_dir=models_dir)
             trainer.train_and_evaluate(features_to_use)
-            trainer.predict_unlabeled_files(features_to_use)
+            trainer.predict_censored(features_to_use)
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))

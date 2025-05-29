@@ -49,7 +49,7 @@ class BaseFeatureEngineer(CompletionDateMixin):
             .drop(columns=["snapshot_bin"])
         )
         return latest_per_bin
-    
+
     def _add_metadata_features(self, df):
         """
         All the features that are extracted from file paths, directoy structures, etc.
@@ -70,8 +70,6 @@ class BaseFeatureEngineer(CompletionDateMixin):
         df["in_docs_dir"] = df["path"].str.lower().str.contains(r"/(?:docs|documentation)/").astype(int)
         df["weekday"] = df["date"].dt.weekday  # Monday = 0
         df["month"] = df["date"].dt.month  # January = 1
-        first_commit = df.groupby("path")["date"].transform("min")
-        df["age_in_days"] = (df["date"] - first_commit).dt.days
 
         path_lower = df["path"].str.lower()
         config_extensions = {"json", "yaml", "yml", "ini", "toml", "env", "cfg", "conf"}
@@ -86,7 +84,7 @@ class BaseFeatureEngineer(CompletionDateMixin):
         df["is_script"] = path_lower.str.endswith((".sh", ".bat")).astype(int)
 
         return df
-    
+
     def _add_time_series_stats(self, df, window=7, n=5):
         df["size"] = pd.to_numeric(df["size"], errors="coerce")
         df["size_diff"] = df.groupby("path")["size"].diff().fillna(0)
@@ -95,9 +93,10 @@ class BaseFeatureEngineer(CompletionDateMixin):
 
         df["std_dev_size_diff"] = df.groupby("path")["size_diff"].transform("std").fillna(0)
 
-        roll = df.groupby("path")["size"].rolling(window=window)
         for stat in ["mean", "std", "max", "min", "median", "var"]:
-            df[f"rolling_{window}_{stat}"] = getattr(roll.shift(1), stat)().reset_index(level=0, drop=True)
+            shifted = df.groupby("path")["size"].shift(1)
+            rolled = shifted.groupby(df["path"]).rolling(window=window, min_periods=1)
+            df[f"rolling_{window}_{stat}"] = getattr(rolled, stat)().reset_index(level=0, drop=True)
 
         df[f"ema_{window}"] = (
             df.groupby("path")["size"]
@@ -133,7 +132,6 @@ class BaseFeatureEngineer(CompletionDateMixin):
 
     def _add_commit_activity_features(self, df, windows: list[int]):
         df["total_commits"] = df.groupby("path").cumcount() + 1
-        df["commits_per_day_so_far"] = df["total_commits"] / (df["age_in_days"] + 1)
 
         for window in windows:
             df[f"commits_last_{window}d"] = df.groupby("path").apply(
@@ -176,7 +174,7 @@ class BaseFeatureEngineer(CompletionDateMixin):
 
 
         return df
-    
+
     def _add_temporal_dynamics_features(self, df):
         df["commit_interval_days"] = df.groupby("path")["date"].diff().dt.days.fillna(0)
 
@@ -203,12 +201,11 @@ class BaseFeatureEngineer(CompletionDateMixin):
         df["commits_x_growth"] = df["total_commits"] * df["recent_growth_ratio"]
         df["interval_x_entropy"] = df["avg_commit_interval"] * df["interval_entropy"]
         df["contrib_x_entropy"] = df["recent_contribution_ratio"] * df["interval_entropy"]
-        df["growth_x_age"] = df["recent_growth_ratio"] * df["age_in_days"]
         df["average_growth_commit"] = df["cumulative_size"] / df["total_commits"]
         df["committer_x_interval_entropy"] = df["committer_entropy"] * df["interval_entropy"]
 
         return df
-    
+
     def _add_committer_features(self, df, min_percentage=0.01):
         total_commits = len(df)
         committer_counts = df["committer"].value_counts()
@@ -287,6 +284,34 @@ class BaseFeatureEngineer(CompletionDateMixin):
         df["recent_contribution_ratio"] = (df["recent_sum"] / df["total_growth_so_far"]).clip(0, 1)
 
         return df
+
+    def collapse_to_first_last(self, df: pd.DataFrame, base_cols: list[str] | None = None) -> pd.DataFrame:
+        candidate = ["file_extension", "path_depth", "in_test_dir", "in_docs_dir", "is_config_file", "is_markdown",
+            "is_desktop_entry", "is_workflow_file", "has_readme_name", "is_source_code", "is_script"]
+        static_cols = [c for c in candidate if c in df.columns]
+
+        if base_cols is None:
+            base_cols = ["size"]
+
+        df_sorted = df.sort_values(["path", "date"])
+
+        first_rows = df_sorted.groupby("path").first().reset_index()
+        last_rows = df_sorted.groupby("path").last().reset_index()
+
+        first_rows = first_rows[["path"] + base_cols].add_suffix("_first")
+        first_rows = first_rows.rename(columns={"path_first": "path"})
+
+        last_rows = last_rows[["path"] + base_cols].add_suffix("_last")
+
+        snap_first_last = first_rows.merge(last_rows, on="path", how="inner")
+        for col in base_cols:
+            snap_first_last[f"{col}_diff_total"] = snap_first_last[f"{col}_last"] - snap_first_last[f"{col}_first"]
+
+        static = df.groupby("path").first().reset_index()[["path"] + static_cols]
+
+        final_dataset = static.merge(snap_first_last, on="path")
+
+        return final_dataset
 
     def calculate_metrics(self, df, window: int = 7):
         df = df.groupby("path").filter(lambda g: len(g) >= 5)

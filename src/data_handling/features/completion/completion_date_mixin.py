@@ -7,7 +7,7 @@ import pandas as pd
 class CompletionDateMixin:
     def __init__(self):
         self.logging = logging.getLogger(self.__class__.__name__)
-        self.now = pd.Timestamp.utcnow().normalize()
+        self.now = pd.Timestamp.utcnow().normalize().tz_localize(None)
 
     def add_days_until_completion(self, df):
         df = df.copy()
@@ -37,7 +37,8 @@ class CompletionDateMixin:
         df['completion_date'] = pd.NaT
         df['completion_reason'] = None
 
-        df["date"] = pd.to_datetime(df["date"], utc=True).dt.tz_localize(None)
+        #df["date"] = pd.to_datetime(df["date"], utc=True).dt.tz_localize(None)
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.tz_localize(None)
 
         project_cutoff = df["commit_interval_days"].replace(0, np.nan).dropna().quantile(0.95)
         project_cutoff = int(np.clip(project_cutoff, 30, 365))
