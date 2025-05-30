@@ -60,9 +60,9 @@ class ExplainabilityAnalyzer:
         self.model_plotter.plot_bar(mae_by_ext, title="MAE per file type", xlabel="File Extension", ylabel="MAE")
         self.model_plotter.plot_bar(mae_by_dir, title="MAE per top level directory", xlabel="Directory",
                                     ylabel="MAE", filename="mae_per_top_dir.png")
-        self.model_plotter.plot_bar(mae_by_reason, title="MAE per completion reason", xlabel="Completion Reason",
+        self.model_plotter.plot_bar(mae_by_reason, title="MAE per mixins reason", xlabel="Completion Reason",
                                     ylabel="MAE", filename="mae_per_completion_reason.png")
         self.model_plotter.plot_bar(mae_by_committer, title="MAE per Committer", xlabel="Committer", ylabel="MAE",
                                     filename="mae_per_committer.png")
-        self.model_plotter.plot_bar(mae_by_completion_days_bins, title="MAE per actual completion days",
+        self.model_plotter.plot_bar(mae_by_completion_days_bins, title="MAE per actual mixins days",
                                     xlabel="Completion days bins", ylabel="MAE", filename="mae_per_completion_bins.png")

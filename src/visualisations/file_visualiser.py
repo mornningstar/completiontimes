@@ -88,13 +88,13 @@ class FileVisualiser:
 
     async def predict_completion(self, target, steps, threshold=10, consecutive_days=7):
         """
-        Predict file completion using a trained model.
+        Predict file mixins using a trained model.
 
-        :param target: The target feature for completion prediction (e.g., 'cumulative_size').
+        :param target: The target feature for mixins prediction (e.g., 'cumulative_size').
         :param steps: Number of future steps to predict.
-        :param threshold: Percentage change threshold for completion.
+        :param threshold: Percentage change threshold for mixins.
         :param consecutive_days: Number of consecutive days the threshold must be met.
-        :return: Predicted completion date or None if not met within the horizon.
+        :return: Predicted mixins date or None if not met within the horizon.
         """
 
         if self.cluster:
@@ -109,7 +109,7 @@ class FileVisualiser:
                 full_data = cluster_df[target]
                 # You may want to check that full_data has enough points
                 if len(full_data) < 2:
-                    self.logging.warning(f"Not enough data for cluster {cluster_id} to predict completion.")
+                    self.logging.warning(f"Not enough data for cluster {cluster_id} to predict mixins.")
                     continue
 
                 # Use the model (assumed to be trained already) for prediction.
@@ -138,14 +138,14 @@ class FileVisualiser:
                         completion_days = i + consecutive_days
                         completion_date = full_data.index[-1] + pd.Timedelta(days=completion_days)
                         self.logging.info(
-                            f"Predicted completion date for cluster {cluster_id}, target {target}: {completion_date}"
+                            f"Predicted mixins date for cluster {cluster_id}, target {target}: {completion_date}"
                         )
                         break
 
                 if completion_date is not None:
                     predictions_by_cluster[cluster_id] = completion_date
                 else:
-                    self.logging.info(f"No completion detected for cluster {cluster_id} within {steps} days.")
+                    self.logging.info(f"No mixins detected for cluster {cluster_id} within {steps} days.")
 
             return predictions_by_cluster
 
@@ -172,8 +172,8 @@ class FileVisualiser:
                 if all(abs(change) < threshold for change in window):
                     completion_days = i + consecutive_days
                     completion_date = full_data.index[-1] + pd.Timedelta(days=completion_days)
-                    self.logging.info(f"Predicted completion date for {target}: {completion_date}")
+                    self.logging.info(f"Predicted mixins date for {target}: {completion_date}")
                     return completion_date
 
-            self.logging.info(f"No completion detected for {target} within {steps} days.")
+            self.logging.info(f"No mixins detected for {target} within {steps} days.")
             return None

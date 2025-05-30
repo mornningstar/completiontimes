@@ -38,7 +38,7 @@ class SurvivalModelTrainer:
     def get_feature_cols(self, df: pd.DataFrame, include_size: bool = False):
         """All numeric columns minus identifiers and the survival targets."""
         drop = {
-            "path", "date", "completion_date", "completion_reason",
+            "date", "completion_date", "completion_reason",
             "duration", "event", "committer", "committer_grouped"
         }
         if not include_size:
@@ -58,18 +58,28 @@ class SurvivalModelTrainer:
         self.logger.debug(f"Train samples: We have {n_train_events}/{len(train_df)} samples with event = 1")
         self.logger.debug(f"Test samples: We have {n_test_events}/{len(test_df)} samples with event = 1")
 
-        groups = train_df["path"].values
-
         feat_cols = self.get_feature_cols(train_df)
         self.logger.info(f"Using features: {feat_cols}")
 
-        x_train = train_df[feat_cols].values
-        y_train = train_df[["duration", "event"]].to_numpy()
+        if isinstance(self.model, CoxTimeVaryingFitterModel):
+            x_train = train_df[feat_cols + ["path"]]
+            y_train = train_df[["event", "stop", "start"]]
 
-        x_test = test_df[feat_cols].values
-        y_test = test_df[["duration", "event"]].to_numpy()
+            x_test = test_df[feat_cols + ["path"]]
+            y_test = test_df[["event", "stop", "start"]]
 
-        self.model.train(x_train, y_train, groups=groups)
+            #x_train = x_train.replace([np.inf, -np.inf], np.nan)
+            #x_train = x_train.fillna(0)
+            self.model.train(x_train, y_train)
+        else:
+            groups = train_df["path"].values
+            x_train = train_df[feat_cols].values
+            y_train = train_df[["duration", "event"]].to_numpy()
+
+            x_test = test_df[feat_cols].values
+            y_test = test_df[["duration", "event"]].to_numpy()
+
+            self.model.train(x_train, y_train, groups=groups)
 
         # 1. Concordance
         c_index = self.model.evaluate(x_test, y_test)

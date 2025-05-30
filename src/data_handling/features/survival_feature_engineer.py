@@ -9,7 +9,6 @@ from src.data_handling.features.base_feature_engineer import BaseFeatureEngineer
 class SurvivalFeatureEngineer(BaseFeatureEngineer):
     def __init__(self, file_repo, plotter, use_categorical):
         super().__init__(file_repo, plotter, use_categorical)
-        self.logging = logging.getLogger(self.__class__.__name__)
 
     @staticmethod
     def get_target_columns():
@@ -34,7 +33,7 @@ class SurvivalFeatureEngineer(BaseFeatureEngineer):
         """
             One row per path with columns:
                duration – days from first commit to observed end-point
-               event    – 1 if a terminal completion occurred, 0 if censored
+               event    – 1 if a terminal mixins occurred, 0 if censored
         """
         snap_num = self.collapse_to_first_last(df, base_cols=["size"])
         snap_dates = (
@@ -51,7 +50,8 @@ class SurvivalFeatureEngineer(BaseFeatureEngineer):
         snap = snap_num.merge(snap_dates, on="path", how="inner")
 
         today = pd.Timestamp.utcnow().normalize()
-        is_event = snap["completion_reason"].isin(["stable_line_change", "idle_timeout"])
+        TERMINAL_REASONS = {"stable_line_change", "idle_timeout"}
+        is_event = snap["completion_reason"].isin(TERMINAL_REASONS)
         end_date = snap["completion_date"].where(is_event, today)
 
         snap["duration"] = (end_date - snap["first_commit_date"]).dt.days.clip(lower=0)
