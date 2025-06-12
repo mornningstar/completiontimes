@@ -28,11 +28,11 @@ class RandomForestModel(BaseModel):
 
         def objective(trial):
             params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 300),
-                'max_depth': trial.suggest_int('max_depth', 5, 30, step=5),
-                'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
-                'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 4),
-                'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5]),
+                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
+                'max_depth': trial.suggest_int('max_depth', 5, 50, step=5),
+                'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
+                'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 10),
+                'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5, None]),
                 'bootstrap': trial.suggest_categorical('bootstrap', [True, False]),
                 'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.05),
             }
@@ -60,10 +60,12 @@ class RandomForestModel(BaseModel):
 
         return study.best_params
 
-    def train(self, x_train, y_train, groups = None):
+    def train(self, x_train, y_train, groups=None):
         self.logger.info("RandomForest - Training model..")
 
         if self.auto_tune_flag:
+            if groups is None:
+                raise ValueError("Groups are required for auto_tuning.")
             self.logger.info("Tuning hyperparameters with Optuna...")
             self.auto_tune(x_train, y_train, groups=groups)
         else:
