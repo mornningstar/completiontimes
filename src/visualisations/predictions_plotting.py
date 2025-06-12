@@ -100,7 +100,7 @@ class PredictionsPlotter(Plotter):
 
     def plot_predictions(self, filedata_df, model_info, label, target):
         self._init_plot(title=f"{target.capitalize()} Over Time for {label}", xlabel='Date',
-                    ylabel=f"'{target.capitalize()}")
+                    ylabel=f"{target.capitalize()}")
 
         # Plot actual data
         plt.plot(filedata_df.index, filedata_df[target], label=f"Actual {target.capitalize()}", color='blue',

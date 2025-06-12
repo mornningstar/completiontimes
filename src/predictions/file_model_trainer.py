@@ -158,9 +158,14 @@ class RegressionModelTrainer:
 
         x_unlabeled = unlabeled_df[feature_cols]
 
-        predictions = self.model.predict(x_unlabeled)
-        predictions = np.clip(predictions, a_min=None, a_max=15) # expm1(15) ≈ 3.2 million days
-        predictions = np.expm1(predictions)
+        predictions_log = self.model.predict(x_unlabeled)
+
+        max_days = 1_000
+        max_safe_log = np.log1p(max_days)  # ≃ 6.91
+        predictions_log = np.clip(predictions_log, a_min=None, a_max=max_safe_log)
+
+        predictions = np.expm1(predictions_log)
+        predictions = np.maximum(predictions, 0)
 
         unlabeled_df["predicted_days_until_completion"] = predictions
         unlabeled_df["completion_date_predicted"] = unlabeled_df["date"] + pd.to_timedelta(predictions, unit="D")
