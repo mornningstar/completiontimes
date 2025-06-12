@@ -1,8 +1,8 @@
 from src.predictions.baselines.linear_regression import LinearRegressionModel
 from src.predictions.baselines.median_base_model import MedianBaseModel
-from src.predictions.ensemble_methods.gradient_boosting import GradientBoosting
+from src.predictions.regression.gradient_boosting import GradientBoosting
 from src.predictions.lightgbm_model import LightGBMModel
-from src.predictions.machine_learning.random_forest import RandomForestModel
+from src.predictions.regression.random_forest import RandomForestModel
 
 PROJECTS = [
     {

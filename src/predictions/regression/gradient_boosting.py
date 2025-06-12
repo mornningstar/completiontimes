@@ -6,7 +6,7 @@ import numpy as np
 import optuna
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import GridSearchCV, cross_val_score
+from sklearn.model_selection import cross_val_score
 
 from src.predictions.base_model import BaseModel
 

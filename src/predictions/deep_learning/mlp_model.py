@@ -1,7 +1,7 @@
 import pprint
 import time
 
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.neural_network import MLPRegressor
 
 from src.predictions.base_model import BaseModel

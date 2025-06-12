@@ -1,5 +1,5 @@
 import numpy as np
-from cuml.fil.fil import pd
+import pandas as pd
 
 
 class CommitActivityFeatureMixin:

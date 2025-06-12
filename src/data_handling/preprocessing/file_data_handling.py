@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from src.data_handling.clustering.cluster_aggregator import ClusterAggregator
-from src.predictions.machine_learning.lstmmodel import LSTMModel
+from src.predictions.deep_learning.lstmmodel import LSTMModel
 from src.predictions.statistical_predictions.seasonal_arima_base import SeasonalARIMABase
 
 GAP_HANDLING_METHODS = {

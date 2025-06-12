@@ -15,8 +15,8 @@ from src.data_handling.features.regression_feature_eng import RegressionFeatureE
 from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
 from src.github.token_bucket import TokenBucket
-from src.predictions.file_model_trainer import RegressionModelTrainer
-from src.predictions.survival_model_trainer import SurvivalModelTrainer
+from src.predictions.training.regression_model_trainer import RegressionModelTrainer
+from src.predictions.training.survival_model_trainer import SurvivalModelTrainer
 from src.visualisations.model_plotting import ModelPlotter
 
 if platform.system() == 'Windows':

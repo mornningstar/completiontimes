@@ -16,4 +16,4 @@ class MedianBaseModel(BaseModel):
         return np.full_like(y_test, self.median)
 
     def predict(self, x_test):
-        return np.full_like(len(x_test), self.median)
+        return np.full(len(x_test), self.median)

@@ -69,7 +69,7 @@ class ExplainabilityAnalyzer:
         errors_df["top_dir"] = errors_df["path"].str.split("/").str[0].fillna("root")
 
         top_errors = errors_df.sort_values("abs_error", ascending=False).head(top_n)
-        print(top_errors[["path", "date", "actual", "pred", "residual"]])
+        self.logging.info("Top errors:\n%s", top_errors[["path", "date", "actual", "pred", "residual"]])
 
         mae_by_ext = errors_df.groupby("extension")["abs_error"].mean().sort_values(ascending=False).head(top_n)
         mae_by_dir = errors_df.groupby("top_dir")["abs_error"].mean().sort_values(ascending=False).head(top_n)
