@@ -1,6 +1,7 @@
 import logging
 
-from shap import TreeExplainer
+from shap import TreeExplainer, LinearExplainer
+from shap.utils._exceptions import InvalidModelError
 
 
 class ExplainabilityAnalyzer:
@@ -11,23 +12,43 @@ class ExplainabilityAnalyzer:
 
         self.logging = logging.getLogger(self.__class__.__name__)
 
-    def analyze_top_errors(self, errors_df, top_n=10):
-        if not hasattr(self.model.model, "feature_importances_"):
-            self.logging.warning("Skipping explainability: model is not tree-based.")
-            return
+    def _get_shap_explainer(self, X_background=None):
+        if self.model.model is None:
+            self.logging.warning("Explainability skipped: model.model is None.")
+            return None
 
+        try:
+            # For tree-based models
+            return TreeExplainer(self.model.model)
+        except InvalidModelError:
+            pass  # Try LinearExplainer next
+
+        try:
+            # For linear models — use small background dataset if possible
+            return LinearExplainer(self.model.model, X_background or "auto")
+        except Exception as e:
+            self.logging.warning(f"Explainability skipped: {e}")
+            return None
+
+    def analyze_top_errors(self, errors_df, top_n=10):
         top_errors = errors_df.sort_values("abs_error", ascending=False).head(top_n)
         X_top = top_errors[self.feature_names].values
 
-        explainer = TreeExplainer(self.model.model)
+        explainer = self._get_shap_explainer(X_background=X_top)
+        if explainer is None:
+            return
+
         shap_values = explainer.shap_values(X_top)
 
         self.model_plotter.plot_shap_summary(shap_values, X_top, self.feature_names)
         self.model_plotter.plot_shap_bar(shap_values[0], self.feature_names)
 
     def analyze_shap_by_committer(self, errors_df, top_n_committers=5):
+        explainer = self._get_shap_explainer()
+        if explainer is None:
+            return
+        
         top_committers = errors_df["committer_grouped"].value_counts().head(top_n_committers).index
-        explainer = TreeExplainer(self.model.model)
 
         for committer in top_committers:
             subset = errors_df[errors_df["committer_grouped"] == committer]

@@ -9,7 +9,7 @@ from src.predictions.explainability.explainability_analyzer import Explainabilit
 from src.visualisations.model_plotting import ModelPlotter
 
 
-class FileModelTrainer:
+class RegressionModelTrainer:
     def __init__(self, project_name, model, images_dir, output_dir="models"):
         self.project_name = project_name
         self.model = model(auto_tune=True)
@@ -51,6 +51,10 @@ class FileModelTrainer:
 
     def evaluate(self, x_test, y_test, test_df):
         y_pred_log = self.model.evaluate(x_test, y_test)
+
+        max_days = 1_000
+        max_safe_log = np.log1p(max_days)  # ≃ 6.91
+        y_pred_log = np.clip(y_pred_log, a_min=None, a_max=max_safe_log)
         y_pred = np.expm1(y_pred_log)
         y_pred = np.maximum(y_pred, 0)
         y_test = np.expm1(y_test)
@@ -90,14 +94,15 @@ class FileModelTrainer:
         feature_cols = self.get_feature_cols(train_df)
         self.logger.info(f"Used feature columns: {feature_cols}")
 
-        x_train = train_df[feature_cols].values
-        self.logger.debug(f"Length of x_train: {len(x_train)}")
-        y_train_log = np.log1p(train_df["days_until_completion"].values)
-        self.logger.debug(f"Length of y_train: {len(y_train_log)}")
-        x_test = test_df[feature_cols].values
-        y_test_log = np.log1p(test_df["days_until_completion"].values)
+        x_train = train_df[feature_cols]
+        x_test = test_df[feature_cols]
 
-        # Training
+        y_train_log = np.log1p(train_df["days_until_completion"].values)
+        y_test_log = np.log1p(test_df["days_until_completion"].values)
+        
+        self.logger.debug(f"Length of x_train: {len(x_train)}")
+        self.logger.debug(f"Length of y_train: {len(y_train_log)}")
+
         groups = train_df["path"].values
         self.train(x_train, y_train_log, groups=groups)
 
@@ -112,6 +117,24 @@ class FileModelTrainer:
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)
+
+        results_csv_path = os.path.join(self.output_dir, "results.csv")
+        results_data = {
+            "project": self.project_name,
+            "model": self.model.__class__.__name__,
+            "mae": round(mae, 4),
+            "rmse": round(rmse, 4),
+            "model_path": model_path
+        }
+        
+        if os.path.exists(results_csv_path):
+            existing_df = pd.read_csv(results_csv_path)
+            results_df = pd.concat([existing_df, pd.DataFrame([results_data])], ignore_index=True)
+        else:
+            results_df = pd.DataFrame([results_data])
+
+        results_df.to_csv(results_csv_path, index=False)
+        
 
         return {
             "model": self.model,

@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class ChangeQualityFeatureMixin:
     def _add_change_quality_features(self, df):
         df["add_ratio"] = (

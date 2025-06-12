@@ -1,6 +1,7 @@
 import pprint
 import time
 
+import numpy as np
 import optuna
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor
@@ -18,11 +19,16 @@ class RandomForestModel(BaseModel):
                   timeout=None):
         self.logger.info("Starting hyperparameter tuning...")
 
-        splitter = GroupTimeSeriesSplit(n_splits=cv)
+        unique_groups = np.unique(groups)
+        num_groups = len(unique_groups)
+
+        test_size = max(1, int(num_groups * 0.2))
+
+        splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
 
         def objective(trial):
             params = {
-                'n_estimators': trial.suggest_int('n_estimators', 100, 300),
+                'n_estimators': trial.suggest_int('n_estimators', 50, 300),
                 'max_depth': trial.suggest_int('max_depth', 5, 30, step=5),
                 'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
                 'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 4),
@@ -54,18 +60,18 @@ class RandomForestModel(BaseModel):
 
         return study.best_params
 
-    def train(self, x_train, y_train):
-        self.logger.info("Training model..")
+    def train(self, x_train, y_train, groups = None):
+        self.logger.info("RandomForest - Training model..")
 
         if self.auto_tune_flag:
             self.logger.info("Tuning hyperparameters with Optuna...")
-            self.auto_tune(x_train, y_train)
+            self.auto_tune(x_train, y_train, groups=groups)
         else:
             self.model = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)
             self.model.fit(x_train, y_train)
             self.logger.info("Training completed.")
 
-    def evaluate(self, x_test, y_test):
+    def evaluate(self, x_test, y_test, **kwargs):
         self.logger.info("Evaluating model...")
         if self.model is None:
             raise ValueError("Model is not trained yet.")

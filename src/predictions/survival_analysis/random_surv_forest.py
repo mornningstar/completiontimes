@@ -34,10 +34,6 @@ class RandomSurvivalForestModel(BaseModel):
 
         skf = StratifiedGroupKFold(n_splits=cv)
 
-        #unique_groups = np.unique(groups)
-        #test_size = max(1, int(0.2 * len(unique_groups)))
-        #splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
-
         for i, (train_idx, test_idx) in enumerate(skf.split(x_train, y=[grp_event[f] for f in groups], groups=groups)):
             y_train_fold = y_train[train_idx]
             y_test_fold = y_train[test_idx]

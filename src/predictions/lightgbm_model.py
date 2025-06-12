@@ -6,6 +6,7 @@ import numpy as np
 import optuna
 from lightgbm import LGBMRegressor
 from mlxtend.evaluate import GroupTimeSeriesSplit
+from optuna.samplers import TPESampler
 from sklearn.metrics import mean_absolute_error
 
 from src.predictions.base_model import BaseModel
@@ -17,10 +18,13 @@ class LightGBMModel(BaseModel):
         self.model = None
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, n_trials = 150, cv = 5):
+    def auto_tune(self, x_train, y_train, groups, n_trials = 75, cv = 5):
         self.logger.info("Starting hyperparameter tuning...")
 
-        test_size = int(len(x_train) * 0.2)
+        unique_groups = np.unique(groups)
+        num_groups = len(unique_groups)
+        test_size = max(1, int(num_groups * 0.2))
+
         splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
 
         def objective(trial):
@@ -35,16 +39,18 @@ class LightGBMModel(BaseModel):
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
 
                 'objective': trial.suggest_categorical('objective', ['quantile', 'regression', 'regression_l1']),
-                'alpha': 0.5,
                 'random_state': 42
             }
+
+            if trial_params['objective'] == 'quantile':
+                trial_params['alpha'] = 0.5
 
             maes = []
 
             for train_idx, valid_idx in splitter.split(x_train, y_train, groups=groups):
-                X_train, X_val = x_train[train_idx], x_train[valid_idx]
+                X_train, X_val = x_train.iloc[train_idx], x_train.iloc[valid_idx]
                 Y_train, Y_val = y_train[train_idx], y_train[valid_idx]
-                m = LGBMRegressor(**trial_params, verbosity=-1)
+                m = LGBMRegressor(**trial_params, verbose=-1)
                 m.fit(X_train, Y_train,
                       eval_set=[(X_val, Y_val)],
                       eval_metric="mae",
@@ -53,17 +59,16 @@ class LightGBMModel(BaseModel):
                 maes.append(mean_absolute_error(Y_val, preds))
             return np.mean(maes)
 
-        study = optuna.create_study(direction='minimize')
+        study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42))
         start_time = time.time()
         study.optimize(objective, n_trials=n_trials)
         elapsed_time = time.time() - start_time
 
-        final_params = {
-            'objective': 'quantile',
-            'alpha': 0.5,
-            'random_state': 42,
-            **study.best_params
-        }
+        best_objective = study.best_params.get('objective', 'regression')
+
+        final_params = {**study.best_params, 'random_state': 42}
+        if final_params['objective'] == 'quantile':
+            final_params['alpha'] = 0.5
 
         self.model = LGBMRegressor(**final_params)
         self.logger.info(f"Best score: {study.best_value:.4f}")
@@ -72,15 +77,12 @@ class LightGBMModel(BaseModel):
 
         return study.best_params
 
-    def train(self, x_train, y_train, groups = None, sample_weight=None):
+    def train(self, x_train, y_train, groups = None):
         if self.auto_tune_flag:
             self.logger.info("Tuning hyperparameters with Optuna...")
             self.auto_tune(x_train, y_train, groups)
 
-        self.model.fit(
-            x_train, y_train,
-            sample_weight=sample_weight
-        )
+        self.model.fit(x_train, y_train)
 
     def evaluate(self, x_test, y_test):
         return self.model.predict(x_test)

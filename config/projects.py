@@ -1,7 +1,8 @@
-from src.predictions.ensemble_methods.random_forest import RandomForestModel
+from src.predictions.baselines.linear_regression import LinearRegressionModel
+from src.predictions.baselines.median_base_model import MedianBaseModel
+from src.predictions.ensemble_methods.gradient_boosting import GradientBoosting
 from src.predictions.lightgbm_model import LightGBMModel
-from src.predictions.survival_analysis.cox_timevarying import CoxTimeVaryingFitterModel
-from src.predictions.survival_analysis.random_surv_forest import RandomSurvivalForestModel
+from src.predictions.machine_learning.random_forest import RandomForestModel
 
 PROJECTS = [
     {
@@ -10,82 +11,318 @@ PROJECTS = [
         'get_newest': False,
         'models': [
             {
-                "class": CoxTimeVaryingFitterModel,
+                "class": LinearRegressionModel,
                 "use_categorical": False,
-                "feature_type": "survival"
+                "feature_type": "regression"
             },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
         ]
     },
-    # {
-    #     'name': 'khoj-ai/khoj',
-    #     'source_directory': 'src',
-    #     'get_newest': False,
-    #     'models': [LightGBMModel]
-    # },
-    # {
-    #     'name': 'vuejs/core',
-    #     'source_directory': 'packages',
-    #     'get_newest': False,
-    #     'models': [LightGBMModel],
-    # },
-    # {
-    #     'name': 'mozilla/addons-server',
-    #     'source_directory': 'src',
-    #     'get_newest': False,
-    #     'models': [RandomForestModel],
-    # },
-    # {
-    #     'name': 'fastapi/fastapi',
-    #     'source_directory': 'fastapi',
-    #     'get_newest': True,
-    #     'models': [
-    #         {
-    #             "class": RandomForestModel,
-    #             "use_categorical": False,
-    #             "feature_type": "regression"
-    #         },
-    #     ]
-    # },
-    # {
-    #     'name': 'pallets/flask',
-    #     'source_directory': 'src',
-    #     'get_newest': True,
-    #     'models': [],
-    # },
-    # {
-    #     'name': 'keras-team/keras',
-    #     'source_directory': 'keras',
-    #     'get_newest': True,
-    #     'models': [],
-    # },
-    # {
-    #     'name': 'tabler/tabler',
-    #     'source_directory': 'src',
-    #     'get_newest': True,
-    #     'models': [],
-    # },
-    # {
-    #     'name': 'google/material-design-lite',
-    #     'source_directory': 'src',
-    #     'get_newest': True,
-    #     'models': [],
-    # },
-    # {
-    #     'name': 'airbnb/kaldb',
-    #     'source_directory': 'astra',
-    #     'get_newest': True,
-    #     'models': [],
-    # },
-    # {
-    #     'name': 'slackhq/astra',
-    #     'source_directory': 'astra',
-    #     'get_newest': True,
-    #     'models': [],
-    # },
-    # {
-    #     'name': 'google/gson',
-    #     'source_directory': '',
-    #     'get_newest': True,
-    #     'models': [],
-    # },
+    {
+        'name': 'khoj-ai/khoj',
+        'source_directory': 'src',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
+    {
+        'name': 'vuejs/core',
+        'source_directory': 'packages',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
+    {
+        'name': 'mozilla/addons-server',
+        'source_directory': 'src',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": LightGBMModel,
+                "use_categorical": True,
+                "feature_type": "regression"
+            },
+            {
+                "class": RandomForestModel,
+                "use_categorical": True,
+                "feature_type": "regression"
+            },
+            {
+                "class": GradientBoosting,
+                "use_categorical": True,
+                "feature_type": "regression"
+            }
+        ]
+    },
+    {
+        'name': 'fastapi/fastapi',
+        'source_directory': 'fastapi',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
+    {
+        'name': 'pallets/flask',
+        'source_directory': 'src',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
+    {
+        'name': 'keras-team/keras',
+        'source_directory': 'keras',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
+    {
+        'name': 'tabler/tabler',
+        'source_directory': 'src',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
+    {
+        'name': 'google/material-design-lite',
+        'source_directory': 'src',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
+    {
+        'name': 'google/gson',
+        'source_directory': '',
+        'get_newest': False,
+        'models': [
+            {
+                "class": LinearRegressionModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            {
+                "class": MedianBaseModel,
+                "use_categorical": False,
+                "feature_type": "regression"
+            },
+            # {
+            #     "class": LightGBMModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": RandomForestModel,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # },
+            # {
+            #     "class": GradientBoosting,
+            #     "use_categorical": True,
+            #     "feature_type": "regression"
+            # }
+        ]
+    },
 ]

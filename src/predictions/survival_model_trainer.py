@@ -124,7 +124,7 @@ class SurvivalModelTrainer:
         return {"concordance": c_index, "model_path": model_path}
 
 
-    def predict_censored(self, file_data_df: pd.DataFrame, latest_only: bool = True):
+    def predict_unlabeled_files(self, file_data_df: pd.DataFrame, latest_only: bool = True):
         """
             For any snapshots that were not marked 'event=1' (i.e. right-censored),
             predict a risk score or survival time.

@@ -107,8 +107,10 @@ class ModelPlotter(Plotter):
         :return:
         """
         corr = features_df.corrwith(target_series).sort_values(key=abs, ascending=False).head(20)
-        self._init_plot(title="Top Feature Correlations with Target", xlabel="Correlation Coefficient")
+        self._init_plot(title="Top Feature Correlations with Target", xlabel="Correlation Coefficient",
+                        ylabel="Features")
         sns.barplot(x=corr.values, y=corr.index, orient="h")
+        plt.subplots_adjust(left=0.1)
         self.save_plot("feature_correlations.png")
 
     def plot_model_feature_importance(self, feature_names, importances, top_n=20):

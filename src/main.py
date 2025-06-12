@@ -15,7 +15,7 @@ from src.data_handling.features.regression_feature_eng import RegressionFeatureE
 from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
 from src.github.token_bucket import TokenBucket
-from src.predictions.file_model_trainer import FileModelTrainer
+from src.predictions.file_model_trainer import RegressionModelTrainer
 from src.predictions.survival_model_trainer import SurvivalModelTrainer
 from src.visualisations.model_plotting import ModelPlotter
 
@@ -38,7 +38,7 @@ ENGINEER_BY_TYPE = {
 }
 
 TRAINER_BY_TYPE = {
-    "regression": FileModelTrainer,
+    "regression": RegressionModelTrainer,
     "survival":   SurvivalModelTrainer,
 }
 
@@ -95,7 +95,7 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
             trainer = trainer_cls(project_name, model_cls, images_dir=images_dir, output_dir=models_dir)
             trainer.train_and_evaluate(features_to_use)
-            trainer.predict_censored(features_to_use)
+            trainer.predict_unlabeled_files(features_to_use, latest_only=True)
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))
