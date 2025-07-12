@@ -9,6 +9,7 @@ PROJECTS = [
         'name': 'flairNLP/fundus',
         'source_directory': 'src',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -41,6 +42,7 @@ PROJECTS = [
         'name': 'khoj-ai/khoj',
         'source_directory': 'src',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -73,6 +75,7 @@ PROJECTS = [
         'name': 'vuejs/core',
         'source_directory': 'packages',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -105,6 +108,7 @@ PROJECTS = [
         'name': 'mozilla/addons-server',
         'source_directory': 'src',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -137,6 +141,7 @@ PROJECTS = [
         'name': 'fastapi/fastapi',
         'source_directory': 'fastapi',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -169,6 +174,7 @@ PROJECTS = [
         'name': 'pallets/flask',
         'source_directory': 'src',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -201,6 +207,7 @@ PROJECTS = [
         'name': 'keras-team/keras',
         'source_directory': 'keras',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -233,6 +240,7 @@ PROJECTS = [
         'name': 'tabler/tabler',
         'source_directory': 'src',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -265,6 +273,7 @@ PROJECTS = [
         'name': 'google/material-design-lite',
         'source_directory': 'src',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -297,6 +306,7 @@ PROJECTS = [
         'name': 'google/gson',
         'source_directory': '',
         'get_newest': False,
+        'ablation': True,
         'models': [
             {
                 "class": LinearRegressionModel,
@@ -324,5 +334,5 @@ PROJECTS = [
                 "feature_type": "regression"
             }
         ]
-     },
+    },
 ]

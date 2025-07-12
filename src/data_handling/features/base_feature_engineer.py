@@ -14,6 +14,16 @@ from src.data_handling.features.mixins.time_series_features import TimeSeriesFea
 from src.visualisations.model_plotting import ModelPlotter
 
 
+ALL_FEATURE_GROUPS = [
+    'MetaDataFeatures',
+    'TimeSeriesFeatures',
+    'CommitActivityFeatures',
+    'TemporalDynamicsFeatures',
+    'FeatureInteractions',
+    'CommitterFeatures',
+    'ChangeQualityFeatures'
+]
+
 class BaseFeatureEngineer(CompletionDateMixin, MetadataFeatureMixin, TimeSeriesFeatureMixin, CommitActivityFeatureMixin,
     TemporalDynamicsFeatureMixin, FeatureInteractionsMixin, CommitterFeatureMixin, ChangeQualityFeatureMixin,):
 
@@ -26,7 +36,6 @@ class BaseFeatureEngineer(CompletionDateMixin, MetadataFeatureMixin, TimeSeriesF
         self.logging = logging.getLogger(self.__class__.__name__)
 
     async def fetch_all_files(self):
-
         all_files_data = await self.file_repo.get_all()
 
         rows = []
@@ -100,16 +109,27 @@ class BaseFeatureEngineer(CompletionDateMixin, MetadataFeatureMixin, TimeSeriesF
 
         return final_dataset
 
-    def calculate_metrics(self, df, window: int = 7):
+    def calculate_metrics(self, df, window: int = 7, include_sets = None):
         df = df.groupby("path").filter(lambda g: len(g) >= 5)
 
-        df = self._add_metadata_features(df, use_categorical = self.use_categorical)
-        df = self._add_time_series_stats(df, window=window)
-        df = self._add_commit_activity_features(df, windows=[30, 90])
-        df = self._add_temporal_dynamics_features(df)
-        df = self._add_feature_interactions(df)
-        df = self._add_committer_features(df, use_categorical = self.use_categorical)
-        df = self._add_change_quality_features(df)
+        if not include_sets:
+            include_sets = ALL_FEATURE_GROUPS
+
+        if 'MetaDataFeatures' in include_sets:
+            df = self._add_metadata_features(df, use_categorical = self.use_categorical)
+        if 'TimeSeriesFeatures' in include_sets:
+            df = self._add_time_series_stats(df, window=window)
+        if 'CommitActivityFeatures' in include_sets:
+            df = self._add_commit_activity_features(df, windows=[30, 90])
+        if 'TemporalDynamicsFeatures' in include_sets:
+            df = self._add_temporal_dynamics_features(df)
+        if 'FeatureInteractions' in include_sets:
+            df = self._add_feature_interactions(df)
+        if 'CommitterFeatures' in include_sets:
+            df = self._add_committer_features(df, use_categorical = self.use_categorical)
+        if 'ChangeQualityFeatures' in include_sets:
+            df = self._add_change_quality_features(df)
+
         df, num_completed_files, total_files = self.add_completion_labels(df)
 
         self.plotter.plot_completion_donut(num_completed_files, total_files)

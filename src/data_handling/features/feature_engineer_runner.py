@@ -1,4 +1,3 @@
-from src.data_handling.features.base_feature_engineer import BaseFeatureEngineer
 from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
 
 
@@ -6,7 +5,7 @@ class FeatureEngineerRunner:
     def __init__(self, feature_engineer):
         self.feature_engineer = feature_engineer
 
-    async def run(self, source_directory: str, is_static: bool = False):
+    async def run(self, source_directory: str, is_static: bool = False, include_sets = None):
         """
         Fetch all files, compute features, and save them back to the database.
         """
@@ -20,7 +19,7 @@ class FeatureEngineerRunner:
             
             self.feature_engineer.plotter.plot_feature_correlations(file_features[feature_cols], file_features["event"])
         else:
-            file_features = self.feature_engineer.calculate_metrics(file_df)
+            file_features = self.feature_engineer.calculate_metrics(file_df, include_sets=include_sets)
             target_series = file_features["days_until_completion"]
             feature_cols = [col for col in file_features.select_dtypes(include="number").columns
                             if col not in ["days_until_completion", "size", "cumulative_size"]]

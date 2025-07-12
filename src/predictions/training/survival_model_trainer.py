@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
-from sksurv.metrics import brier_score
+#from sksurv.metrics import brier_score
 
 from src.predictions.survival_analysis.cox_timevarying import CoxTimeVaryingFitterModel
 from src.visualisations.model_plotting import ModelPlotter
@@ -167,9 +167,9 @@ class SurvivalModelTrainer:
         y_test_structured = self.model._format_labels(y_test)
         surv_funcs = self.model.model.predict_survival_function(x_test)
         surv_probs = np.asarray([[fn(t) for t in times] for fn in surv_funcs])
-        eval_times, brier_scores = brier_score(y_test_structured, y_test_structured, surv_probs, times)
+        #eval_times, brier_scores = brier_score(y_test_structured, y_test_structured, surv_probs, times)
 
-        return dict(zip(eval_times, brier_scores))
+        #return dict(zip(eval_times, brier_scores))
 
     def evaluate_horizon_classification(self, x_test, y_test, horizon=90, threshold=0.5):
         """
