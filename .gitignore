@@ -4,5 +4,6 @@ images/
 .DS_Store
 venv
 runs/
+config/.env
 
 cluster_summary.csv

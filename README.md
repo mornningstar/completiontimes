@@ -23,7 +23,8 @@ conda activate rapids-25.02
 ```
 
 The configuration in `config/config.py` requires a GitHub access token for downloading repository data. 
-Replace the placeholder token with your own before running the pipeline.
+Provide your token via the `GITHUB_TOKEN` environment variable, for example by creating a `.env` file based on 
+`config/.env.example` and setting `GITHUB_TOKEN` accordingly.
 
 ## Running the pipeline
 
