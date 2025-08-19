@@ -1,12 +1,7 @@
 from typing import List
 
-from src.predictions.training.regression_model_trainer import RegressionModelTrainer
-from src.predictions.training.survival_model_trainer import SurvivalModelTrainer
+from src.pipeline.configs import TRAINER_BY_TYPE
 
-TRAINER_BY_TYPE = {
-    "regression": RegressionModelTrainer,
-    "survival":   SurvivalModelTrainer,
-}
 
 class ModelTrainingPipeline:
     def __init__(self, project_name, models: List[dict], feature_pipeline, images_dir: str, models_dir: str):

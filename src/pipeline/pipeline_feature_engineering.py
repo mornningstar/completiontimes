@@ -4,13 +4,8 @@ from typing import Dict, Tuple, Type
 import pandas as pd
 
 from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
-from src.data_handling.features.regression_feature_eng import RegressionFeatureEngineering
-from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
+from src.pipeline.configs import ENGINEER_BY_TYPE
 
-ENGINEER_BY_TYPE = {
-    "regression": RegressionFeatureEngineering,
-    "survival":   SurvivalFeatureEngineer,
-}
 
 class FeatureEngineeringPipeline:
     def __init__(self, file_repo, plotter, source_directory):

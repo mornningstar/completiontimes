@@ -10,13 +10,12 @@ from config.config import CONFIG
 from config.projects import PROJECTS
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.file_repo import FileRepository
-from src.data_handling.features.base_feature_engineer import ALL_FEATURE_GROUPS
-from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
 from src.data_handling.features.regression_feature_eng import RegressionFeatureEngineering
 from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
 from src.github.token_bucket import TokenBucket
 from src.logging_config import setup_logging
+from src.pipeline.ablation import AblationStudy
 from src.pipeline.pipeline_feature_engineering import FeatureEngineeringPipeline
 from src.pipeline.pipeline_model_training import ModelTrainingPipeline
 from src.predictions.training.regression_model_trainer import RegressionModelTrainer
@@ -28,15 +27,6 @@ if platform.system() == 'Windows':
 
 setup_logging()
 
-TRAINER_BY_TYPE = {
-    "regression": RegressionModelTrainer,
-    "survival":   SurvivalModelTrainer,
-}
-
-ENGINEER_BY_TYPE = {
-    "regression": RegressionFeatureEngineering,
-    "survival":   SurvivalFeatureEngineer,
-}
 
 
 async def process_project(project, token_bucket: TokenBucket = None):
@@ -77,55 +67,19 @@ async def process_project(project, token_bucket: TokenBucket = None):
             await training_pipe.run()
 
         else:
-            ablation_results = []
+            ablation_study = AblationStudy(
+                project_name,
+                file_repo,
+                plotter,
+                images_dir,
+                models_dir,
+                source_directory,
+                timestamp
+            )
 
-            ablation_configs = [{"name": "ALL", "include": ALL_FEATURE_GROUPS}]
-            for feature in ALL_FEATURE_GROUPS:
-                ablation_configs.append({
-                    "name": f"all_except_{feature}",
-                    "include": [f for f in ALL_FEATURE_GROUPS if f != feature]
-                })
+            ablation_results = await ablation_study.run(models=models)
 
-            for ablation in ablation_configs:
-                logging.info("Running ablation study: {}".format(ablation["name"]))
-
-                for model_cfg in models:
-                    model_cls = model_cfg["class"]
-                    flag = model_cfg.get("use_categorical", False)
-                    feature_type = model_cfg.get("feature_type", "regression")
-                    eng_cls = ENGINEER_BY_TYPE[feature_type]
-
-                    ablation_images_dir = os.path.join(images_dir, ablation["name"])
-                    ablation_models_dir = os.path.join(models_dir, ablation["name"])
-                    os.makedirs(ablation_images_dir, exist_ok=True)
-                    os.makedirs(ablation_models_dir, exist_ok=True)
-
-                    engineer = eng_cls(file_repo, plotter, use_categorical=flag)
-                    runner = FeatureEngineerRunner(engineer)
-                    engineered_df = await runner.run(source_directory=source_directory, include_sets=ablation["include"])
-
-                    logging.info(f"Computed ablation features for {ablation['name']} - rows = {len(engineered_df)}")
-
-                    trainer_cls = TRAINER_BY_TYPE[feature_type]
-                    trainer = trainer_cls(project_name, model_cls, ablation_images_dir, ablation_models_dir)
-                    metrics = trainer.train_and_evaluate(engineered_df)
-                    filtered_metrics = {
-                        "MAE": metrics["mae"],
-                        "RMSE": metrics["rmse"]
-                    }
-                    trainer.predict_unlabeled_files(engineered_df, latest_only=True)
-
-                    result_row = {
-                        "project": project_name,
-                        "timestamp": timestamp,
-                        "configuration": ablation["name"],
-                        "model": model_cls.__name__,
-                        **filtered_metrics
-                    }
-
-                    ablation_results.append(result_row)
-
-            if is_ablation_study and ablation_results:
+            if ablation_results:
                 results_df = pd.DataFrame(ablation_results)
                 results_path = os.path.join(run_output_dir, "results.csv")
                 results_df.to_csv(results_path, index=False)
