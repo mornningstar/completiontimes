@@ -17,6 +17,8 @@ from src.data_handling.features.survival_feature_engineer import SurvivalFeature
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
 from src.github.token_bucket import TokenBucket
 from src.logging_config import setup_logging
+from src.pipeline.pipeline_feature_engineering import FeatureEngineeringPipeline
+from src.pipeline.pipeline_model_training import ModelTrainingPipeline
 from src.predictions.training.regression_model_trainer import RegressionModelTrainer
 from src.predictions.training.survival_model_trainer import SurvivalModelTrainer
 from src.visualisations.model_plotting import ModelPlotter
@@ -26,15 +28,16 @@ if platform.system() == 'Windows':
 
 setup_logging()
 
+TRAINER_BY_TYPE = {
+    "regression": RegressionModelTrainer,
+    "survival":   SurvivalModelTrainer,
+}
+
 ENGINEER_BY_TYPE = {
     "regression": RegressionFeatureEngineering,
     "survival":   SurvivalFeatureEngineer,
 }
 
-TRAINER_BY_TYPE = {
-    "regression": RegressionModelTrainer,
-    "survival":   SurvivalModelTrainer,
-}
 
 async def process_project(project, token_bucket: TokenBucket = None):
     project_name = project['name']
@@ -67,32 +70,11 @@ async def process_project(project, token_bucket: TokenBucket = None):
         plotter = ModelPlotter(project_name, images_dir=images_dir)
         await AsyncDatabase.initialize()
 
-        features_cache: dict[tuple[type, bool], pd.DataFrame] = {}
+        feature_pipeline = FeatureEngineeringPipeline(file_repo, plotter, source_directory)
 
         if not is_ablation_study:
-            for model_cfg in models:
-                model_cls = model_cfg["class"]
-                flag = model_cfg.get("use_categorical", False)
-                feature_type = model_cfg.get("feature_type", "regression")
-                eng_cls = ENGINEER_BY_TYPE[feature_type]
-
-                cache_key = (eng_cls, flag)
-
-                if cache_key not in features_cache:
-                    engineer = eng_cls(file_repo, plotter, use_categorical=flag)
-                    runner = FeatureEngineerRunner(engineer)
-                    engineered_df = await runner.run(source_directory=source_directory)
-                    features_cache[cache_key] = engineered_df
-                    logging.info(f"Computed features with {eng_cls.__name__} (use_categorical={flag}) "
-                                 f"– rows={len(engineered_df)}")
-
-                features_to_use = features_cache[cache_key]
-
-                trainer_cls = TRAINER_BY_TYPE[feature_type]
-
-                trainer = trainer_cls(project_name, model_cls, images_dir=images_dir, output_dir=models_dir)
-                trainer.train_and_evaluate(features_to_use)
-                trainer.predict_unlabeled_files(features_to_use, latest_only=True)
+            training_pipe = ModelTrainingPipeline(project_name, models, feature_pipeline, images_dir, models_dir)
+            await training_pipe.run()
 
         else:
             ablation_results = []
@@ -143,12 +125,11 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
                     ablation_results.append(result_row)
 
-        if is_ablation_study and ablation_results:
-            results_df = pd.DataFrame(ablation_results)
-            results_path = os.path.join(run_output_dir, "results.csv")
-            results_df.to_csv(results_path, index=False)
-            logging.info(f"Ablation study results saved to {results_path}")
-
+            if is_ablation_study and ablation_results:
+                results_df = pd.DataFrame(ablation_results)
+                results_path = os.path.join(run_output_dir, "results.csv")
+                results_df.to_csv(results_path, index=False)
+                logging.info(f"Ablation study results saved to {results_path}")
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))
