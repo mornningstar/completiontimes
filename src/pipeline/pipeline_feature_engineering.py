@@ -21,7 +21,7 @@ class FeatureEngineeringPipeline:
 
         cache_key = (eng_cls, flag)
         if cache_key not in self._features_cache:
-            engineer = eng_cls(self.file_repo, self.plotter, self.source_directory)
+            engineer = eng_cls(self.file_repo, self.plotter, use_categorical=flag)
             runner = FeatureEngineerRunner(engineer)
             engineered_df = await runner.run(source_directory=self.source_directory)
             self._features_cache[cache_key] = engineered_df

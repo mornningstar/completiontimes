@@ -10,16 +10,12 @@ from config.config import CONFIG
 from config.projects import PROJECTS
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.file_repo import FileRepository
-from src.data_handling.features.regression_feature_eng import RegressionFeatureEngineering
-from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
 from src.github.token_bucket import TokenBucket
 from src.logging_config import setup_logging
 from src.pipeline.ablation import AblationStudy
 from src.pipeline.pipeline_feature_engineering import FeatureEngineeringPipeline
 from src.pipeline.pipeline_model_training import ModelTrainingPipeline
-from src.predictions.training.regression_model_trainer import RegressionModelTrainer
-from src.predictions.training.survival_model_trainer import SurvivalModelTrainer
 from src.visualisations.model_plotting import ModelPlotter
 
 if platform.system() == 'Windows':
