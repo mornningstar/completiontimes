@@ -4,9 +4,9 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
-#from sksurv.metrics import brier_score
 
 from src.predictions.survival_analysis.cox_timevarying import CoxTimeVaryingFitterModel
+from src.predictions.training.results.results import SurvivalTrainingResult
 from src.visualisations.model_plotting import ModelPlotter
 
 
@@ -121,7 +121,7 @@ class SurvivalModelTrainer:
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)
 
-        return {"concordance": c_index, "model_path": model_path}
+        return SurvivalTrainingResult(concordance=c_index, model_path=model_path)
 
 
     def predict_unlabeled_files(self, file_data_df: pd.DataFrame, latest_only: bool = True):
