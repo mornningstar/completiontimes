@@ -36,3 +36,20 @@ python src/main.py
 ```
 
 Results (trained models and visualisations) are written to timestamped folders under `runs/`.
+
+## Logging
+Logging is configured via `src/logging_config.py` and uses the following defaults:
+
+- **Level**: `DEBUG` (can be overridden when calling `setup_logging`)
+- **Format**: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
+
+Noise from third-party libraries such as `matplotlib` and `pymongo` is suppressed by
+setting their log levels to `WARNING`.
+
+When creating new entry points or standalone scripts, initialise logging by calling:
+
+```python
+from src.logging_config import setup_logging
+
+setup_logging()
+```

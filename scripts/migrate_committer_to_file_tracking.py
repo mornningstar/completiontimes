@@ -6,6 +6,7 @@ from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.commit_repo import CommitRepository
 from src.data_handling.database.file_repo import FileRepository
 from src.github.http_client import GitHubClient
+from src.logging_config import setup_logging
 
 
 async def migrate_add_committer(file_repo: FileRepository, commit_repo: CommitRepository):
@@ -39,7 +40,7 @@ async def migrate_add_committer(file_repo: FileRepository, commit_repo: CommitRe
         logging.info(f"Updated committer info for file: {path}")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    setup_logging(logging.INFO)
 
     async def main():
         repo = "openedx/edx-platform"

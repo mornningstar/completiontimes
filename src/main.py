@@ -16,6 +16,7 @@ from src.data_handling.features.regression_feature_eng import RegressionFeatureE
 from src.data_handling.features.survival_feature_engineer import SurvivalFeatureEngineer
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
 from src.github.token_bucket import TokenBucket
+from src.logging_config import setup_logging
 from src.predictions.training.regression_model_trainer import RegressionModelTrainer
 from src.predictions.training.survival_model_trainer import SurvivalModelTrainer
 from src.visualisations.model_plotting import ModelPlotter
@@ -23,15 +24,7 @@ from src.visualisations.model_plotting import ModelPlotter
 if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
-logging.getLogger('pymongo').setLevel(logging.WARNING)
-
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,  # Adjust the level as needed
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+setup_logging()
 
 ENGINEER_BY_TYPE = {
     "regression": RegressionFeatureEngineering,
