@@ -7,6 +7,7 @@ class EvaluationMetrics:
     """ Container for evaluation metrics. """
     mse: float
     mae: float
+    mae_std: float
     rmse: float
 
 @dataclass

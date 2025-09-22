@@ -27,10 +27,10 @@ class Plotter:
 
         plt.grid(True)
 
-    def plot_bar(self, series, title, xlabel, ylabel, rotation=45, filename=None):
+    def plot_bar(self, series, title, xlabel, ylabel, rotation=45, filename=None, yerr=None):
         self._init_plot(title=title, xlabel=xlabel, ylabel=ylabel, figsize=(10, 6))
 
-        series.plot(kind='bar', rot=rotation)
+        series.plot(kind='bar', rot=rotation, yerr=yerr)
         plt.tight_layout()
 
         if filename is None:

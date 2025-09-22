@@ -71,19 +71,24 @@ class ExplainabilityAnalyzer:
         top_errors = errors_df.sort_values("abs_error", ascending=False).head(top_n)
         self.logging.info("Top errors:\n%s", top_errors[["path", "date", "actual", "pred", "residual"]])
 
-        mae_by_ext = errors_df.groupby("extension")["abs_error"].mean().sort_values(ascending=False).head(top_n)
-        mae_by_dir = errors_df.groupby("top_dir")["abs_error"].mean().sort_values(ascending=False).head(top_n)
-        mae_by_reason = errors_df.groupby("completion_reason")["abs_error"].mean().sort_values(ascending=False)
-        mae_by_committer = errors_df.groupby("committer_grouped")["abs_error"].mean().sort_values(ascending=False)
-        mae_by_completion_days_bins = (errors_df.groupby("true_bin", observed=False)["abs_error"].mean()
-                                       .sort_values(ascending=False))
+        def get_error_stats(group_by_col):
+            stats = (errors_df.groupby(group_by_col)["abs_error"].agg(['mean', 'std']).sort_values(
+                by="mean", ascending=False).head(top_n))
+            return stats['mean'], stats['std']
 
-        self.model_plotter.plot_bar(mae_by_ext, title="MAE per file type", xlabel="File Extension", ylabel="MAE")
+        mae_by_ext, std_by_ext = get_error_stats("extension")
+        mae_by_dir, std_by_dir = get_error_stats("top_dir")
+        mae_by_reason, std_by_reason = get_error_stats("completion_reason")
+        mae_by_committer, std_by_committer = get_error_stats("committer_grouped")
+        mae_by_bins, std_by_bins = get_error_stats("true_bin")
+
+        self.model_plotter.plot_bar(mae_by_ext, title="MAE per file type", xlabel="File Extension", ylabel="MAE",
+                                    yerr=std_by_ext)
         self.model_plotter.plot_bar(mae_by_dir, title="MAE per top level directory", xlabel="Directory",
-                                    ylabel="MAE", filename="mae_per_top_dir.png")
+                                    ylabel="MAE", yerr=std_by_dir, filename="mae_per_top_dir.png")
         self.model_plotter.plot_bar(mae_by_reason, title="MAE per mixins reason", xlabel="Completion Reason",
-                                    ylabel="MAE", filename="mae_per_completion_reason.png")
+                                    ylabel="MAE", yerr=std_by_reason, filename="mae_per_completion_reason.png")
         self.model_plotter.plot_bar(mae_by_committer, title="MAE per Committer", xlabel="Committer", ylabel="MAE",
-                                    filename="mae_per_committer.png")
-        self.model_plotter.plot_bar(mae_by_completion_days_bins, title="MAE per actual mixins days",
-                                    xlabel="Completion days bins", ylabel="MAE", filename="mae_per_completion_bins.png")
+                                    yerr=std_by_committer, filename="mae_per_committer.png")
+        self.model_plotter.plot_bar(mae_by_bins, title="MAE per actual mixins days", xlabel="Completion days bins",
+                                    ylabel="MAE", yerr=std_by_bins, filename="mae_per_completion_bins.png")

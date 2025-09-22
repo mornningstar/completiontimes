@@ -65,6 +65,7 @@ class RegressionModelTrainer:
             "model": self.model.__class__.__name__,
             "mse": round(metrics.mse, 4),
             "mae": round(metrics.mae, 4),
+            "mae_std": round(metrics.mae_std, 4),
             "rmse": round(metrics.rmse, 4),
             "model_path": model_path,
         }

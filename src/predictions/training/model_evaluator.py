@@ -24,13 +24,6 @@ class ModelEvaluator:
         y_pred = np.maximum(np.expm1(y_pred_log), 0)
         y_test = np.expm1(y_test)
 
-        mse = mean_squared_error(y_true=y_test, y_pred=y_pred)
-        mae = mean_absolute_error(y_true=y_test, y_pred=y_pred)
-        rmse = np.sqrt(mse)
-        metrics = EvaluationMetrics(mse=mse, mae=mae, rmse=rmse)
-
-        self.logger.info(f"Evaluation — MSE: {metrics.mse:.2f}, MAE: {metrics.mae:.2f}, RMSE: {metrics.rmse:.2f}")
-
         result_df = test_df[["path", "date"]].copy()
         result_df["actual"] = y_test
         result_df["pred"] = y_pred
@@ -39,6 +32,16 @@ class ModelEvaluator:
 
         result_df["residual"] = result_df["actual"] - result_df["pred"]
         result_df["abs_error"] = result_df["residual"].abs()
+
+        # ------ Calculate Metrics ------
+        mse = mean_squared_error(y_true=y_test, y_pred=y_pred)
+        mae = mean_absolute_error(y_true=y_test, y_pred=y_pred)
+        mae_std = result_df["abs_error"].std()
+        rmse = np.sqrt(mse)
+        metrics = EvaluationMetrics(mse=mse, mae=mae, mae_std=mae_std, rmse=rmse)
+
+        self.logger.info(f"Evaluation — MSE: {metrics.mse:.2f}, MAE: {metrics.mae:.2f} (std: {metrics.mae_std:.2f}), "
+                         f"RMSE: {metrics.rmse:.2f}")
 
         extra_cols = [col for col in ["completion_reason", "committer_grouped"] if col in test_df.columns]
         feature_df = test_df[["path", "date"] + feature_cols + extra_cols]
