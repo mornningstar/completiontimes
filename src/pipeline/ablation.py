@@ -3,8 +3,8 @@ import os
 
 import pandas as pd
 
-from src.data_handling.features.base_feature_engineer import ALL_FEATURE_GROUPS, FEATURE_GROUP_COLUMNS
 from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
+from src.data_handling.features.feature_generator_registry import feature_generator_registry
 from src.pipeline.configs import ENGINEER_BY_TYPE, TRAINER_BY_TYPE
 
 
@@ -33,13 +33,8 @@ class AblationStudy:
             logging.info(f"Cache missing for {cache_key}. Generating full feature set...")
             engineer = eng_cls(self.file_repo, self.plotter, use_categorical=flag)
             runner = FeatureEngineerRunner(engineer)
-
-            feature_sets = ALL_FEATURE_GROUPS
-            if feature_type == "regression":
-                feature_sets = ALL_FEATURE_GROUPS + ['RegressionSpecific']
-
             engineered_df = await runner.run(
-                source_directory=self.source_directory, include_sets=feature_sets
+                source_directory=self.source_directory, include_sets=feature_generator_registry.get_all_names()
             )
             self._features_cache[cache_key] = engineered_df
             logging.info(f"Cached features for {cache_key} - rows = {len(engineered_df)}")
@@ -48,12 +43,13 @@ class AblationStudy:
 
     async def run(self, models):
         ablation_results = []
-        ablation_configs = [{"name": "ALL", "include": ALL_FEATURE_GROUPS}]
+        all_groups = feature_generator_registry.get_all_names()
+        ablation_configs = [{"name": "ALL", "include": all_groups}]
 
-        for feature in ALL_FEATURE_GROUPS:
+        for feature in all_groups:
             ablation_configs.append({
                 "name": f"all_except_{feature}",
-                "include": [f for f in ALL_FEATURE_GROUPS if f != feature]
+                "include": [f for f in all_groups if f != feature]
             })
 
         for model_cfg in models:
@@ -93,7 +89,6 @@ class AblationStudy:
                 else:  # Handle dataclass
                     result_data.update(vars(training_result))
 
-                #trainer.predict_unlabeled_files(ablation_df, latest_only=True)
                 ablation_results.append(result_data)
 
         return ablation_results
@@ -105,19 +100,23 @@ class AblationStudy:
         }
         selected_cols = {col for col in df.columns if col in essential_cols}
 
-        groups_to_process = include_groups[:]
+        for group_name in include_groups:
+            generator = feature_generator_registry.get(group_name)
+            if generator:
+                feature_names = generator.get_feature_names()
+                for item in feature_names:
+                    if item.endswith('_'):
+                        selected_cols.update(df.columns[df.columns.str.startswith(item)])
+                    elif item in df.columns:
+                        selected_cols.add(item)
+
+            else:
+                logging.warning(f"Feature group '{group_name}' not found in ALL_FEATURE_GENERATORS. Skipping.")
+
         if feature_type == "regression":
-            groups_to_process.append('RegressionSpecific')
-
-        for group_name in groups_to_process:
-            if group_name not in FEATURE_GROUP_COLUMNS:
-                logging.warning(f"Feature group '{group_name} not found in mapping. Skipping.")
-                continue
-
-            for item in FEATURE_GROUP_COLUMNS[group_name]:
-                if item.endswith('_'): # This is a prefix
-                    selected_cols.update(df.columns[df.columns.str.startswith(item)])
-                elif item in df.columns: # This is an exact column name
-                    selected_cols.add(item)
+            regression_specific_cols = ["age_in_days", "commits_per_day_so_far", "growth_x_age"]
+            for col in regression_specific_cols:
+                if col in df.columns:
+                    selected_cols.add(col)
 
         return list(selected_cols)

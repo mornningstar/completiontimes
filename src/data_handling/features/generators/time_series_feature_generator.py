@@ -1,9 +1,21 @@
 import numpy as np
 import pandas as pd
 
+from src.data_handling.features.feature_generator_registry import feature_generator_registry
+from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator
 
-class TimeSeriesFeatureMixin:
-    def _add_time_series_stats(self, df, window=7, n=5):
+@feature_generator_registry.register
+class TimeSeriesFeatureGenerator(AbstractFeatureGenerator):
+    def get_feature_names(self) -> list[str]:
+        return [
+            "size_diff", "std_dev_size_diff", "rolling_7_mean", "rolling_7_std", "rolling_7_max", "rolling_7_min",
+            "rolling_7_median", "rolling_7_var", "ema_7", "cumulative_size", "cum_lines_added", "cum_lines_deleted",
+            "cum_line_change", "cumulative_mean", "cumulative_std", "lag_1_size", "lag_2_size", "lag_3_size",
+            "lag_4_size", "lag_5_size", "lag_6_size", "lag_7_size", "recent_growth_ratio", "absolute_change",
+            "percentage_change", "rolling_7_mean_to_std_ratio"
+        ]
+
+    def generate(self, df: pd.DataFrame, window: int = 7, n: int = 5, **kwargs) -> pd.DataFrame:
         df["size"] = pd.to_numeric(df["size"], errors="coerce")
         df["size_diff"] = df.groupby("path")["size"].diff().fillna(0)
         df.dropna(subset=["size"], inplace=True)

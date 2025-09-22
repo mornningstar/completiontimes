@@ -14,8 +14,8 @@ class SurvivalFeatureEngineer(BaseFeatureEngineer):
     def get_target_columns():
         return ["start", "stop", "event"]
 
-    def calculate_metrics(self, df, window = 7, is_static: bool = False):
-        df = super().calculate_metrics(df)
+    def engineer_features(self, df, window = 7, is_static: bool = False):
+        df = super().engineer_features(df)
 
         if is_static:
             out = self._add_survival_targets_static(df)

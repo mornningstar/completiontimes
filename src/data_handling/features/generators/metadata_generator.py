@@ -1,13 +1,18 @@
 import pandas as pd
 
+from src.data_handling.features.feature_generator_registry import feature_generator_registry
+from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator
 
-class MetadataFeatureMixin:
-    def _add_metadata_features(self, df, use_categorical = False):
-        """
-        All the features that are extracted from file paths, directoy structures, etc.
-        :param df:
-        :return:
-        """
+@feature_generator_registry.register
+class MetadataFeatureGenerator(AbstractFeatureGenerator):
+    def get_feature_names(self) -> list[str]:
+        return [
+            'path_depth', 'in_test_dir', 'in_docs_dir', 'weekday', 'month', 'is_conifg_file', 'is_markdown',
+            'is_desktop_entry', 'is_workflow_file', 'has_readme_name', 'is_source_code', 'is_script',
+            'ext_'
+        ]
+
+    def generate(self, df: pd.DataFrame, use_categorical: bool = False, **kwargs) -> pd.DataFrame:
         df["file_extension"] = df["path"].str.extract(r'\.([a-zA-Z0-9]+)$')[0].fillna("unknown")
         ext_counts = df["file_extension"].value_counts()
         top_exts = ext_counts[(ext_counts >= 10) | (ext_counts.rank(method="min") <= 10)].index
@@ -17,7 +22,7 @@ class MetadataFeatureMixin:
             dummies = pd.get_dummies(df["file_extension"], prefix="ext")
             df = pd.concat([df, dummies], axis=1)
 
-        df["path_depth"] = df["path"].apply(lambda x: x.count("/"))
+        df["path_depth"] = df["path"].str.count("/")
         df["in_test_dir"] = df["path"].str.lower().str.contains(r"/tests?/").astype(int)
         df["in_docs_dir"] = df["path"].str.lower().str.contains(r"/(?:docs|documentation)/").astype(int)
         df["weekday"] = df["date"].dt.weekday  # Monday = 0

@@ -1,0 +1,78 @@
+import os
+
+import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+
+from src.predictions.explainability.explainability_analyzer import ExplainabilityAnalyzer
+from src.predictions.training.results.results import EvaluationMetrics, ErrorAnalysisPath, EvaluationPath
+
+
+class ModelEvaluator:
+    def __init__(self, model, model_plotter, output_dir, logger):
+        self.model = model
+        self.model_plotter = model_plotter
+        self.output_dir = output_dir
+        self.logger = logger
+
+    def evaluate(self, x_test, y_test, test_df, feature_cols):
+        y_pred_log = self.model.evaluate(x_test, y_test)
+
+        max_days = 1_000
+        max_safe_log = np.log1p(max_days)
+        y_pred_log = np.clip(y_pred_log, a_min=None, a_max=max_safe_log)
+        y_pred = np.maximum(np.expm1(y_pred_log), 0)
+        y_test = np.expm1(y_test)
+
+        mse = mean_squared_error(y_true=y_test, y_pred=y_pred)
+        mae = mean_absolute_error(y_true=y_test, y_pred=y_pred)
+        rmse = np.sqrt(mse)
+        metrics = EvaluationMetrics(mse=mse, mae=mae, rmse=rmse)
+
+        self.logger.info(f"Evaluation — MSE: {metrics.mse:.2f}, MAE: {metrics.mae:.2f}, RMSE: {metrics.rmse:.2f}")
+
+        result_df = test_df[["path", "date"]].copy()
+        result_df["actual"] = y_test
+        result_df["pred"] = y_pred
+        eval_csv_path = os.path.join(self.output_dir, "evaluation.csv")
+        result_df.to_csv(eval_csv_path, index=False)
+
+        result_df["residual"] = result_df["actual"] - result_df["pred"]
+        result_df["abs_error"] = result_df["residual"].abs()
+
+        extra_cols = [col for col in ["completion_reason", "committer_grouped"] if col in test_df.columns]
+        feature_df = test_df[["path", "date"] + feature_cols + extra_cols]
+        errors_df = pd.merge(result_df, feature_df, on=["path", "date"])
+
+        self.model_plotter.plot_residuals(y_test, y_pred)
+        self.model_plotter.plot_errors_vs_actual(y_test, y_pred)
+        self.model_plotter.plot_predictions_vs_actual(y_test, y_pred)
+        self.model_plotter.plot_top_errors(y_test, y_pred, n=10)
+
+        eval_path = EvaluationPath(evaluation_path=eval_csv_path)
+        return y_pred, errors_df, metrics, eval_path
+
+
+    @staticmethod
+    def perform_error_analysis(errors_df, feature_cols, model, model_plotter, output_dir, logger,
+                               threshold: float = 30.0):
+        errors_df["error_type"] = "ok"
+        errors_df.loc[errors_df["residual"] > threshold, "error_type"] = "underestimated"
+        errors_df.loc[errors_df["residual"] < -threshold, "error_type"] = "overestimated"
+
+        errors_df["true_bin"] = pd.cut(errors_df["actual"], bins=[0, 30, 90, 180, 365, 1000],
+                                       labels=["<30", "30–90", "90–180", "180–365", "365+"])
+
+        error_counts = errors_df["error_type"].value_counts()
+        logger.info("Error types:\n{}".format(error_counts))
+        model_plotter.plot_error_types_pie(errors_df["error_type"])
+
+        explain = ExplainabilityAnalyzer(model=model, feature_names=feature_cols, model_plotter=model_plotter)
+        explain.analyze_top_errors(errors_df)
+        explain.analyze_error_sources(errors_df)
+        explain.analyze_shap_by_committer(errors_df)
+
+        error_csv = os.path.join(output_dir, "error_analysis.csv")
+        errors_df.to_csv(error_csv, index=False)
+
+        return ErrorAnalysisPath(error_analysis_path=error_csv)

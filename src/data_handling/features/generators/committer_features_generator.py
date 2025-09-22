@@ -2,12 +2,20 @@ import logging
 
 import pandas as pd
 
+from src.data_handling.features.feature_generator_registry import feature_generator_registry
+from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator
 
-class CommitterFeatureMixin:
+@feature_generator_registry.register
+class CommitterFeatureGenerator(AbstractFeatureGenerator):
     def __init__(self):
         self.logging = logging.getLogger(self.__class__.__name__)
 
-    def _add_committer_features(self, df, use_categorical = False, min_percentage=0.01):
+    def get_feature_names(self) -> list[str]:
+        return [
+            "committer_"
+        ]
+
+    def generate(self, df: pd.DataFrame, use_categorical: bool = False, min_percentage: float = 0.01, **kwargs) -> pd.DataFrame:
         total_commits = len(df)
         committer_counts = df["committer"].value_counts()
         threshold = total_commits * min_percentage

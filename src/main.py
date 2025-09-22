@@ -96,7 +96,7 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
 async def main():
     shared_token_bucket = TokenBucket()
-    tasks = [process_project(project, shared_token_bucket) for project in PROJECTS]
+    tasks = [process_project(project, shared_token_bucket) for project in config["project"]]
     await asyncio.gather(*tasks)
 
 if __name__ == '__main__':

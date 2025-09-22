@@ -3,12 +3,10 @@ import os
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-from src.predictions.explainability.explainability_analyzer import ExplainabilityAnalyzer
-from src.predictions.training.error_analysis_utils import perform_error_analysis
-from src.predictions.training.evaluation_utils import evaluate_regression_predictions
-from src.predictions.training.results.results import EvaluationMetrics, TrainingResult
+from src.predictions.training.data_splitter import DataSplitter
+from src.predictions.training.model_evaluator import ModelEvaluator
+from src.predictions.training.results.results import TrainingResult
 from src.visualisations.model_plotting import ModelPlotter
 
 
@@ -16,32 +14,15 @@ class RegressionModelTrainer:
     def __init__(self, project_name, model, images_dir, output_dir="models"):
         self.project_name = project_name
         self.model = model(auto_tune=True)
-
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
         self.model_plotter = ModelPlotter(project_name, model, images_dir=images_dir)
-
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.evaluator = ModelEvaluator(self.model, self.model_plotter, self.output_dir, self.logger)
 
-    def split_by_file(self, file_data_df, test_ratio=0.2, random_state=42):
-        file_data_df = file_data_df.copy()
-        valid_paths = file_data_df[file_data_df["days_until_completion"].notna()]["path"].unique()
-
-        # Shuffle paths to avoid any ordering bias
-        np.random.seed(random_state)
-        np.random.shuffle(valid_paths)
-
-        split_idx = int(len(valid_paths) * (1 - test_ratio))
-        train_paths = valid_paths[:split_idx]
-        test_paths = valid_paths[split_idx:]
-
-        train_df = file_data_df[file_data_df["path"].isin(train_paths)].dropna(subset=["days_until_completion"])
-        test_df = file_data_df[file_data_df["path"].isin(test_paths)].dropna(subset=["days_until_completion"])
-
-        return train_df, test_df
-
-    def get_feature_cols(self, file_data_df, include_size=False):
+    @staticmethod
+    def get_feature_cols(file_data_df, include_size=False):
         drop_cols = ["path", "date", "completion_date", "completion_reason", "days_until_completion", "committer",
                      "committer_grouped"]
         if not include_size:
@@ -49,11 +30,9 @@ class RegressionModelTrainer:
 
         return [col for col in file_data_df.select_dtypes(include=np.number).columns if col not in drop_cols]
 
-    def train(self, x_train, y_train, groups=None):
-        self.model.train(x_train, y_train, groups=groups)
 
     def train_and_evaluate(self, file_data_df):
-        train_df, test_df = self.split_by_file(file_data_df)
+        train_df, test_df = DataSplitter.split_by_file(file_data_df)
         feature_cols = self.get_feature_cols(train_df)
         self.logger.info(f"Used feature columns: {feature_cols}")
 
@@ -67,25 +46,15 @@ class RegressionModelTrainer:
         self.logger.debug(f"Length of y_train: {len(y_train_log)}")
 
         groups = train_df["path"].values
-        self.train(x_train, y_train_log, groups=groups)
+        self.model.train(x_train, y_train_log, groups=groups)
 
         importances = self.model.get_feature_importances()
         if importances is not None:
             self.model_plotter.plot_model_feature_importance(feature_cols, importances)
 
         #Evaluation
-        y_pred, errors_df, metrics, eval_path = evaluate_regression_predictions(x_test, y_test_log, test_df, self.model,
-                                                                     self.model_plotter, self.output_dir, self.logger,
-                                                                     feature_cols=feature_cols)
-
-        error_path = perform_error_analysis(
-            errors_df,
-            feature_cols,
-            self.model,
-            self.model_plotter,
-            self.output_dir,
-            self.logger,
-        )
+        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, feature_cols)
+        error_path = self.evaluator.perform_error_analysis(errors_df, feature_cols)
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)

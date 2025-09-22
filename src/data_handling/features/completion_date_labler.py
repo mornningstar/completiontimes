@@ -3,42 +3,42 @@ import logging
 import numpy as np
 import pandas as pd
 
+from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator
 
-class CompletionDateMixin:
+
+class CompletionDateLabler:
     def __init__(self):
         self.logging = logging.getLogger(self.__class__.__name__)
         self.now = pd.Timestamp.utcnow().normalize().tz_localize(None)
 
     def add_days_until_completion(self, df):
         df = df.copy()
-
         df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
-
         df["completion_date"] = pd.to_datetime(df["completion_date"], errors="coerce").dt.tz_localize(None)
         df.loc[df["completion_date"].notnull(), "completion_date"] = (
             df.loc[df["completion_date"].notnull(), "completion_date"].dt.tz_localize(None)
         )
-
         df["days_until_completion"] = (
                 df["completion_date"] - df["date"]
         ).dt.days
-
         df["days_until_completion"] = df["days_until_completion"].clip(lower=0)
 
         return df
 
-    def add_completion_labels(self, df):
+    def label(self, df: pd.DataFrame, **kwargs) -> tuple[pd.DataFrame, int, int]:
         """
-            Add a 'completion_date' column for each file based on two strategies:
-            1. A stable pattern: percentage_change stays below threshold for consecutive_days commits
-            2. A deletion event:
-            3. A long period of inactivity after the last commit (idle_days_cutoff)
+        Add a 'completion_date' column for each file based on two strategies:
+        1. A stable pattern: percentage_change stays below threshold for consecutive_days commits
+        2. A deletion event:
+        3. A long period of inactivity after the last commit (idle_days_cutoff)
         """
         df['completion_date'] = pd.NaT
         df['completion_reason'] = None
 
-        #df["date"] = pd.to_datetime(df["date"], utc=True).dt.tz_localize(None)
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.tz_localize(None)
+
+        if "commit_interval_days" not in df.columns:
+            raise ValueError("'commit_interval_days' must be calculated before calling this labler.")
 
         project_cutoff = df["commit_interval_days"].replace(0, np.nan).dropna().quantile(0.95)
         project_cutoff = int(np.clip(project_cutoff, 30, 365))
@@ -49,26 +49,23 @@ class CompletionDateMixin:
             completion_date, reason = self._check_stable_line_change_window(group)
 
             if completion_date:
-                completion_date = pd.to_datetime(completion_date).tz_localize(None)
-                df.loc[df["path"] == path, "completion_date"] = completion_date
+                df.loc[df["path"] == path, "completion_date"] = pd.to_datetime(completion_date).tz_localize(None)
                 df.loc[df["path"] == path, "completion_reason"] = reason
                 continue
 
             # Strategy 2: Explicit deletion (size = 0)
             if group["size"].iloc[-1] == 0:
                 deletion_date = group["date"].iloc[-1]
-                deletion_date = pd.to_datetime(deletion_date).tz_localize(None)
-                df.loc[df["path"] == path, "completion_date"] = deletion_date
+                df.loc[df["path"] == path, "completion_date"] = pd.to_datetime(deletion_date).tz_localize(None)
                 df.loc[df["path"] == path, "completion_reason"] = "deleted"
                 continue
 
             # Strategy 3: Inactivity fallback
             last_commit_date = group["date"].max()
-            last_commit_date = last_commit_date.tz_localize(None).to_pydatetime()
-            days_since_last_commit = (self.now - last_commit_date).days
+            days_since_last_commit = (self.now - last_commit_date.tz_localize(None)).days
 
             if days_since_last_commit > project_cutoff:
-                df.loc[df["path"] == path, "completion_date"] = last_commit_date
+                df.loc[df["path"] == path, "completion_date"] = last_commit_date.tz_localize(None)
                 df.loc[df["path"] == path, "completion_reason"] = "idle_timeout"
 
         num_completed_files = df[df['completion_date'].notna()]['path'].nunique()
@@ -87,14 +84,11 @@ class CompletionDateMixin:
 
         return df, num_completed_files, total_files
 
+
     def _check_stable_line_change_window(self, group):
         group = group.sort_values("date").reset_index(drop=True)
-
-        min_commits = 3
-        min_days = 14
-        confirm_idle_days = 30
+        min_commits, min_days, confirm_idle_days = 3, 14, 30
         now = pd.Timestamp.now().normalize()
-
         median_change = group["line_change"].median()
         threshold = max(3, median_change * 0.15)
 
@@ -103,16 +97,16 @@ class CompletionDateMixin:
             return None, None
 
         stable_block_indices = []
-
         for idx in range(len(group) - 1, -1, -1):
             if group.loc[idx, "line_change"] <= threshold:
                 stable_block_indices.append(idx)
             else:
                 break
 
-        stable_block_indices = sorted(stable_block_indices)
-        stable_block = group.loc[stable_block_indices]
+        if not stable_block_indices:
+            return None, None
 
+        stable_block = group.loc[sorted(stable_block_indices)]
         if len(stable_block) < min_commits:
             return None, None
 
@@ -121,10 +115,7 @@ class CompletionDateMixin:
             return None, None
 
         final_commit_date = stable_block["date"].iloc[-1]
-        if (now - final_commit_date).days < confirm_idle_days:
-            return None, None
-
-        if group["size"].iloc[-1] == 0:
+        if (now - final_commit_date).days < confirm_idle_days or group["size"].iloc[-1] == 0:
             return None, None
 
         return final_commit_date, "stable_line_change"

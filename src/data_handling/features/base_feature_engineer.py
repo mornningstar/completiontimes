@@ -3,71 +3,29 @@ import logging
 import pandas as pd
 
 from src.data_handling.database.file_repo import FileRepository
-from src.data_handling.features.mixins.change_quality_features import ChangeQualityFeatureMixin
-from src.data_handling.features.mixins.commit_activity_features import CommitActivityFeatureMixin
-from src.data_handling.features.mixins.committer_features import CommitterFeatureMixin
-from src.data_handling.features.mixins.completion_date_mixin import CompletionDateMixin
-from src.data_handling.features.mixins.feature_interactions import FeatureInteractionsMixin
-from src.data_handling.features.mixins.metadata_features import MetadataFeatureMixin
-from src.data_handling.features.mixins.temporal_dynamics_features import TemporalDynamicsFeatureMixin
-from src.data_handling.features.mixins.time_series_features import TimeSeriesFeatureMixin
+from src.data_handling.features.completion_date_labler import CompletionDateLabler
+from src.data_handling.features.feature_generator_registry import feature_generator_registry
+from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator
+from src.data_handling.features.generators.change_quality_generator import ChangeQualityFeatureGenerator
+from src.data_handling.features.generators.commit_activity_feature_generator import CommitActivityFeatureGenerator
+from src.data_handling.features.generators.committer_features_generator import CommitterFeatureGenerator
+from src.data_handling.features.generators.feature_interactions_generator import FeatureInteractionsGenerator
+from src.data_handling.features.generators.metadata_generator import MetadataFeatureGenerator
+from src.data_handling.features.generators.temporal_dynamics_feature_generator import TemporalDynamicsFeatureGenerator
+from src.data_handling.features.generators.time_series_feature_generator import TimeSeriesFeatureGenerator
 from src.visualisations.model_plotting import ModelPlotter
 
-
-ALL_FEATURE_GROUPS = [
-    'MetaDataFeatures',
-    'TimeSeriesFeatures',
-    'CommitActivityFeatures',
-    'TemporalDynamicsFeatures',
-    'FeatureInteractions',
-    'CommitterFeatures',
-    'ChangeQualityFeatures'
-]
-
-FEATURE_GROUP_COLUMNS = {
-    'MetaDataFeatures': [
-        'path_depth', 'in_test_dir', 'in_docs_dir', 'weekday', 'month',
-        'is_config_file', 'is_markdown', 'is_desktop_entry', 'is_workflow_file',
-        'has_readme_name', 'is_source_code', 'is_script',
-        'ext_' #Prefix for dummy variables
-    ],
-    'TimeSeriesFeatures': [
-        'size_diff', 'std_dev_size_diff', 'rolling_7_mean', 'rolling_7_std',
-        'rolling_7_max', 'rolling_7_min', 'rolling_7_median', 'rolling_7_var', 'ema_7',
-        'cumulative_size', 'cum_lines_added', 'cum_lines_deleted', 'cum_line_change',
-        'cumulative_mean', 'cumulative_std', 'recent_growth_ratio', 'absolute_change',
-        'percentage_change', 'rolling_7_mean_to_std_ratio',
-        'lag_'  # Prefix for lag features
-    ],
-    'CommitActivityFeatures': [
-        'total_commits', 'recent_commit_activity_surge', 'days_since_last_commit',
-        'is_first_commit', 'std_commit_interval', 'avg_commit_interval', 'last_3_mean',
-        'last_3_slope', 'last_5_slope', 'growth_acceleration', 'days_with_commits_ratio',
-        'commits_last_', 'commits_ratio_'  # Prefixes for windowed features
-    ],
-    'TemporalDynamicsFeatures': [
-        'commit_interval_days', 'interval_entropy', 'committer_entropy',
-        'add_entropy', 'deletions_entropy', 'early_growth', 'total_growth_so_far',
-        'normalized_early_growth', 'recent_sum', 'recent_contribution_ratio',
-        'commit_interval_std'
-    ],
-    'FeatureInteractions': [
-        'commits_x_growth', 'interval_x_entropy', 'contrib_x_entropy',
-        'average_growth_commit', 'committer_x_interval_entropy'
-    ],
-    'CommitterFeatures': [
-        'committer_'  # Prefix for dummy variables
-    ],
-    'ChangeQualityFeatures': [
-        'add_ratio', 'pure_addition', 'pure_deletion', 'pure_addition_count', 'pure_deletion_count'
-    ],
-    'RegressionSpecific': [
-        'age_in_days', 'commits_per_day_so_far', 'growth_x_age'
-    ]
+ALL_FEATURE_GENERATORS: dict[str, AbstractFeatureGenerator] = {
+    'MetaDataFeatures': MetadataFeatureGenerator(),
+    'TimeSeriesFeatures': TimeSeriesFeatureGenerator(),
+    'CommitActivityFeatures': CommitActivityFeatureGenerator(),
+    'TemporalDynamicsFeatures': TemporalDynamicsFeatureGenerator(),
+    'FeatureInteractions': FeatureInteractionsGenerator(),
+    'CommitterFeatures': CommitterFeatureGenerator(),
+    'ChangeQualityFeatures': ChangeQualityFeatureGenerator(),
 }
 
-class BaseFeatureEngineer(CompletionDateMixin, MetadataFeatureMixin, TimeSeriesFeatureMixin, CommitActivityFeatureMixin,
-    TemporalDynamicsFeatureMixin, FeatureInteractionsMixin, CommitterFeatureMixin, ChangeQualityFeatureMixin,):
+class BaseFeatureEngineer:
 
     def __init__(self, file_repo: FileRepository, plotter: ModelPlotter, use_categorical: bool = False):
         super().__init__()
@@ -76,25 +34,7 @@ class BaseFeatureEngineer(CompletionDateMixin, MetadataFeatureMixin, TimeSeriesF
         self.plotter = plotter
         self.use_categorical = use_categorical
         self.logging = logging.getLogger(self.__class__.__name__)
-
-    async def fetch_all_files(self):
-        all_files_data = await self.file_repo.get_all()
-
-        rows = []
-        for file_data in all_files_data:
-            file_path = file_data['path']
-            for commit in file_data.get('commit_history', []):
-                rows.append({
-                    "path": file_path,
-                    "date": pd.to_datetime(commit['date']),
-                    "size": commit['size'],
-                    "committer": commit['committer'],
-                    "lines_added": commit.get("additions", 0),
-                    "lines_deleted": commit.get("deletions", 0),
-                    "line_change": commit.get("total_changes", 0)
-                })
-
-        return pd.DataFrame(rows).sort_values('date')
+        self.completion_labler = CompletionDateLabler()
 
     @staticmethod
     def select_snapshots(df, every="7D"):
@@ -151,29 +91,29 @@ class BaseFeatureEngineer(CompletionDateMixin, MetadataFeatureMixin, TimeSeriesF
 
         return final_dataset
 
-    def calculate_metrics(self, df, window: int = 7, include_sets = None):
+    def engineer_features(self, df, window: int = 7, include_sets = None):
         df = df.groupby("path").filter(lambda g: len(g) >= 5)
+        if df.empty:
+            return df
 
-        if not include_sets:
-            include_sets = ALL_FEATURE_GROUPS
+        if include_sets is None:
+            include_sets = feature_generator_registry.get_all_names()
 
-        if 'MetaDataFeatures' in include_sets:
-            df = self._add_metadata_features(df, use_categorical = self.use_categorical)
-        if 'TimeSeriesFeatures' in include_sets:
-            df = self._add_time_series_stats(df, window=window)
-        if 'CommitActivityFeatures' in include_sets:
-            df = self._add_commit_activity_features(df, windows=[30, 90])
-        if 'TemporalDynamicsFeatures' in include_sets:
-            df = self._add_temporal_dynamics_features(df)
-        if 'FeatureInteractions' in include_sets:
-            df = self._add_feature_interactions(df)
-        if 'CommitterFeatures' in include_sets:
-            df = self._add_committer_features(df, use_categorical = self.use_categorical)
-        if 'ChangeQualityFeatures' in include_sets:
-            df = self._add_change_quality_features(df)
+        for group_name in include_sets:
+            generator = feature_generator_registry.get(group_name)
+            if generator:
+                self.logging.info(f"Generating features for: {group_name}")
+                df = generator.generate(
+                    df,
+                    use_categorical=self.use_categorical,
+                    windows=[30, 90]
+                )
+            else:
+                self.logging.warning(f"Feature group '{group_name}' not found in registry.")
 
-        df, num_completed_files, total_files = self.add_completion_labels(df)
-
-        self.plotter.plot_completion_donut(num_completed_files, total_files)
+        # Apply the completion date labels
+        df, num_completed_files, total_files = self.completion_labler.label(df)
+        if total_files > 0:
+            self.plotter.plot_completion_donut(num_completed_files, total_files)
 
         return df
