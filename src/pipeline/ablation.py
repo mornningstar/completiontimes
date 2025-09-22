@@ -1,7 +1,9 @@
 import logging
 import os
 
-from src.data_handling.features.base_feature_engineer import ALL_FEATURE_GROUPS
+import pandas as pd
+
+from src.data_handling.features.base_feature_engineer import ALL_FEATURE_GROUPS, FEATURE_GROUP_COLUMNS
 from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
 from src.pipeline.configs import ENGINEER_BY_TYPE, TRAINER_BY_TYPE
 
@@ -15,6 +17,34 @@ class AblationStudy:
         self.models_dir = models_dir
         self.source_directory = source_directory
         self.timestamp = timestamp
+        self._features_cache = {}
+
+    async def _get_or_create_features(self, model_cfg):
+        """
+        Efficiently gets or creates the full feature set for a given model configuration.
+        Caches the result to avoid re-computation.
+        """
+        flag = model_cfg.get("use_categorical", False)
+        feature_type = model_cfg.get("feature_type", "regression")
+        eng_cls = ENGINEER_BY_TYPE[feature_type]
+
+        cache_key = (eng_cls, flag)
+        if cache_key not in self._features_cache:
+            logging.info(f"Cache missing for {cache_key}. Generating full feature set...")
+            engineer = eng_cls(self.file_repo, self.plotter, use_categorical=flag)
+            runner = FeatureEngineerRunner(engineer)
+
+            feature_sets = ALL_FEATURE_GROUPS
+            if feature_type == "regression":
+                feature_sets = ALL_FEATURE_GROUPS + ['RegressionSpecific']
+
+            engineered_df = await runner.run(
+                source_directory=self.source_directory, include_sets=feature_sets
+            )
+            self._features_cache[cache_key] = engineered_df
+            logging.info(f"Cached features for {cache_key} - rows = {len(engineered_df)}")
+
+        return self._features_cache[cache_key]
 
     async def run(self, models):
         ablation_results = []
@@ -26,40 +56,68 @@ class AblationStudy:
                 "include": [f for f in ALL_FEATURE_GROUPS if f != feature]
             })
 
-        for ablation in ablation_configs:
-            logging.info("Running ablation study: {}".format(ablation["name"]))
+        for model_cfg in models:
+            # 1. Get the master feature dataframe for this model config (e.g. regression, categorical)
+            master_df = await self._get_or_create_features(model_cfg)
+            feature_type = model_cfg.get("feature_type", "regression")
 
-            for model_cfg in models:
-                flag = model_cfg.get("use_categorical", False)
-                feature_type = model_cfg.get("feature_type", "regression")
-                eng_cls = ENGINEER_BY_TYPE[feature_type]
+            for ablation in ablation_configs:
+                model_name = model_cfg['class'].__name__
+                logging.info(f"Running ablation study: {ablation['name']} for model: {model_name}")
 
-                ablation_images_dir = os.path.join(self.images_dir, ablation["name"])
-                ablation_models_dir = os.path.join(self.models_dir, ablation["name"])
+                # 2. Select the subset of features for this ablation run
+                columns_to_use = self._get_columns_for_ablation(master_df, ablation["include"], feature_type)
+                ablation_df = master_df[columns_to_use]
+
+                trainer_cls = TRAINER_BY_TYPE[feature_type]
+
+                ablation_images_dir = os.path.join(self.images_dir, model_name, ablation["name"])
+                ablation_models_dir = os.path.join(self.models_dir, model_name, ablation["name"])
                 os.makedirs(ablation_images_dir, exist_ok=True)
                 os.makedirs(ablation_models_dir, exist_ok=True)
 
-                engineer = eng_cls(self.file_repo, self.plotter, use_categorical=flag)
-                runner = FeatureEngineerRunner(engineer)
-                engineered_df = await runner.run(
-                    source_directory=self.source_directory, include_sets=ablation["include"]
-                )
-
-                logging.info(f"Computed ablation features for {ablation['name']} - rows = {len(engineered_df)}")
-
-                trainer_cls = TRAINER_BY_TYPE[feature_type]
                 trainer = trainer_cls(self.project_name, model_cfg["class"], ablation_images_dir, ablation_models_dir)
-                training_result = trainer.train_and_evaluate(engineered_df)
 
-                result_row = {
+                # 3. Train the model on the subset of features
+                training_result = trainer.train_and_evaluate(ablation_df)
+
+                result_data = {
                     "project": self.project_name,
+                    "model": model_name,
                     "configuration": ablation["name"],
-                    **training_result,
                     "timestamp": self.timestamp,
                 }
 
-                trainer.predict_unlabeled_files(engineered_df, latest_only=True)
+                if isinstance(training_result, dict):
+                    result_data.update(training_result)
+                else:  # Handle dataclass
+                    result_data.update(vars(training_result))
 
-                ablation_results.append(result_row)
+                #trainer.predict_unlabeled_files(ablation_df, latest_only=True)
+                ablation_results.append(result_data)
 
         return ablation_results
+
+    def _get_columns_for_ablation(self, df: pd.DataFrame, include_groups: list[str], feature_type: str):
+        essential_cols = {
+            "path", "date", "completion_date", "completion_reason", "committer",
+            "committer_grouped", "days_until_completion", "start", "stop", "event", "duration"
+        }
+        selected_cols = {col for col in df.columns if col in essential_cols}
+
+        groups_to_process = include_groups[:]
+        if feature_type == "regression":
+            groups_to_process.append('RegressionSpecific')
+
+        for group_name in groups_to_process:
+            if group_name not in FEATURE_GROUP_COLUMNS:
+                logging.warning(f"Feature group '{group_name} not found in mapping. Skipping.")
+                continue
+
+            for item in FEATURE_GROUP_COLUMNS[group_name]:
+                if item.endswith('_'): # This is a prefix
+                    selected_cols.update(df.columns[df.columns.str.startswith(item)])
+                elif item in df.columns: # This is an exact column name
+                    selected_cols.add(item)
+
+        return list(selected_cols)

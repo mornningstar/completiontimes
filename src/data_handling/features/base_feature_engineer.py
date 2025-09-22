@@ -24,6 +24,48 @@ ALL_FEATURE_GROUPS = [
     'ChangeQualityFeatures'
 ]
 
+FEATURE_GROUP_COLUMNS = {
+    'MetaDataFeatures': [
+        'path_depth', 'in_test_dir', 'in_docs_dir', 'weekday', 'month',
+        'is_config_file', 'is_markdown', 'is_desktop_entry', 'is_workflow_file',
+        'has_readme_name', 'is_source_code', 'is_script',
+        'ext_' #Prefix for dummy variables
+    ],
+    'TimeSeriesFeatures': [
+        'size_diff', 'std_dev_size_diff', 'rolling_7_mean', 'rolling_7_std',
+        'rolling_7_max', 'rolling_7_min', 'rolling_7_median', 'rolling_7_var', 'ema_7',
+        'cumulative_size', 'cum_lines_added', 'cum_lines_deleted', 'cum_line_change',
+        'cumulative_mean', 'cumulative_std', 'recent_growth_ratio', 'absolute_change',
+        'percentage_change', 'rolling_7_mean_to_std_ratio',
+        'lag_'  # Prefix for lag features
+    ],
+    'CommitActivityFeatures': [
+        'total_commits', 'recent_commit_activity_surge', 'days_since_last_commit',
+        'is_first_commit', 'std_commit_interval', 'avg_commit_interval', 'last_3_mean',
+        'last_3_slope', 'last_5_slope', 'growth_acceleration', 'days_with_commits_ratio',
+        'commits_last_', 'commits_ratio_'  # Prefixes for windowed features
+    ],
+    'TemporalDynamicsFeatures': [
+        'commit_interval_days', 'interval_entropy', 'committer_entropy',
+        'add_entropy', 'deletions_entropy', 'early_growth', 'total_growth_so_far',
+        'normalized_early_growth', 'recent_sum', 'recent_contribution_ratio',
+        'commit_interval_std'
+    ],
+    'FeatureInteractions': [
+        'commits_x_growth', 'interval_x_entropy', 'contrib_x_entropy',
+        'average_growth_commit', 'committer_x_interval_entropy'
+    ],
+    'CommitterFeatures': [
+        'committer_'  # Prefix for dummy variables
+    ],
+    'ChangeQualityFeatures': [
+        'add_ratio', 'pure_addition', 'pure_deletion', 'pure_addition_count', 'pure_deletion_count'
+    ],
+    'RegressionSpecific': [
+        'age_in_days', 'commits_per_day_so_far', 'growth_x_age'
+    ]
+}
+
 class BaseFeatureEngineer(CompletionDateMixin, MetadataFeatureMixin, TimeSeriesFeatureMixin, CommitActivityFeatureMixin,
     TemporalDynamicsFeatureMixin, FeatureInteractionsMixin, CommitterFeatureMixin, ChangeQualityFeatureMixin,):
 
