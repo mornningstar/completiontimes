@@ -15,66 +15,69 @@ class CommitActivityFeatureGenerator(AbstractFeatureGenerator):
         ]
 
     def generate(self, df: pd.DataFrame, windows: list[int], **kwargs) -> pd.DataFrame:
-        df_sorted = df.sort_values('date').copy()
+        df_sorted = df.sort_values(['path', 'date']).copy()
         df_sorted['commit_num'] = df_sorted.groupby('path').cumcount() + 1
         df_sorted['total_commits'] = df_sorted.groupby('path')['commit_num'].transform('max')
 
-        # --- Efficient Rolling Commit Counts using merge_asof ---
+        def _calculate_commits_in_windows(group: pd.DataFrame) -> pd.DataFrame:
+            """
+            For a single path group, calculate the number of commits in each window.
+            """
+            dates = group['date']
+            commit_nums = group['commit_num']
+
+            result_df = pd.DataFrame(index=group.index)
+
+            for window in windows:
+                start_dates = dates - pd.Timedelta(days=window)
+                past_indices = dates.searchsorted(start_dates, side='right') - 1
+
+                past_commit_nums = np.where(
+                    past_indices >= 0,
+                    commit_nums.iloc[past_indices].values,
+                    0
+                )
+
+                result_df[f'commits_last_{window}d'] = commit_nums.values - past_commit_nums
+
+            return result_df
+
+        window_commit_counts = df_sorted.groupby('path', group_keys=False).apply(
+            _calculate_commits_in_windows
+        )
+        df_sorted = pd.concat([df_sorted, window_commit_counts], axis=1)
+
         for window in windows:
-            df_sorted[f'window_start_date_{window}'] = df_sorted['date'] - pd.Timedelta(days=window)
+            df_sorted[f"commits_ratio_{window}d"] = (df_sorted[f"commits_last_{window}d"] / df_sorted["total_commits"]).fillna(0).clip(0, 1)
 
-            # merge_asof finds the last commit before the window_start_date
-            merged = pd.merge_asof(
-                df_sorted[['path', 'date', 'window_start_date_{}'.format(window), 'commit_num']],
-                df_sorted[['path', 'date', 'commit_num']],
-                on='date',
-                by='path',
-                left_on='window_start_date_{}'.format(window),
-                direction='backward'
-            )
-            # The difference in commit numbers gives the count in the window
-            df_sorted[f'commits_last_{window}d'] = (merged['commit_num_x'] - merged['commit_num_y']).fillna(
-                merged['commit_num_x'])
-
-        # Now, merge these calculated features back to the original dataframe
-        cols_to_merge = ['path', 'date', 'total_commits'] + [f'commits_last_{w}d' for w in windows]
-        df = pd.merge(df, df_sorted[cols_to_merge], on=['path', 'date'], how='left')
-        # --- End of efficient calculation ---
-
-        for window in windows:
-            df[f"commits_ratio_{window}d"] = (df[f"commits_last_{window}d"] / df["total_commits"]).fillna(0).clip(0, 1)
-            df[f"commits_ratio_{window}d_smooth"] = (
-                df.groupby("path")[f"commits_ratio_{window}d"]
-                .transform(lambda x: x.rolling(window=3, min_periods=1).mean())
-            )
-
-        df["recent_commit_activity_surge"] = (
-                df["commits_ratio_30d"] - df["commits_ratio_90d"]
+        df_sorted["recent_commit_activity_surge"] = (
+                df_sorted[f"commits_ratio_{windows[0]}d"] - df_sorted[f"commits_ratio_{windows[1]}d"]
         )
 
-        df["days_since_last_commit"] = df.groupby("path")["date"].diff().dt.days.fillna(0)
-        df["is_first_commit"] = (df["days_since_last_commit"] == 0).astype(int)
+        df_sorted["days_since_last_commit"] = df_sorted.groupby("path")["date"].diff().dt.days
+        df_sorted["is_first_commit"] = (df_sorted["days_since_last_commit"].isna()).astype(int)
 
-        median = df["days_since_last_commit"].median()
-        df["days_since_last_commit"] = df["days_since_last_commit"].fillna(median)
+        df_sorted["days_since_last_commit"] = df_sorted["days_since_last_commit"].fillna(0)
 
-        df["std_commit_interval"] = (
-            df.groupby("path")["days_since_last_commit"].expanding().std().reset_index(level=0, drop=True).fillna(0)
+        df_sorted["std_commit_interval"] = (
+            df_sorted.groupby("path")["days_since_last_commit"].expanding().std().reset_index(level=0, drop=True).fillna(0)
         )
 
-        df["avg_commit_interval"] = df.groupby("path")["days_since_last_commit"].transform("mean").fillna(0)
-        df["last_3_mean"] = df[["lag_1_size", "lag_2_size", "lag_3_size"]].mean(axis=1)
-        df["last_3_slope"] = df["lag_1_size"] - df["lag_3_size"]
-        df["last_5_slope"] = df["lag_1_size"] - df["lag_5_size"]
-        df["growth_acceleration"] = df["last_3_slope"] - df["last_5_slope"]
-        df.replace([np.inf, -np.inf], 0, inplace=True)
+        df_sorted["avg_commit_interval"] = df_sorted.groupby("path")["days_since_last_commit"].transform("mean").fillna(0)
 
-        first = df.groupby("path")["date"].transform("min")
-        last = df.groupby("path")["date"].transform("max")
+
+        df_sorted.replace([np.inf, -np.inf], 0, inplace=True)
+
+        first = df_sorted.groupby("path")["date"].transform("min")
+        last = df_sorted.groupby("path")["date"].transform("max")
         span_days = (last - first).dt.days + 1
-        active_day_counts = df.groupby("path")["date"].nunique()
-        df = df.merge(active_day_counts.rename("active_days"), on="path", how="left")
-        df["days_with_commits_ratio"] = (df["active_days"] / span_days).clip(0, 1).fillna(0)
-        df.drop(columns=["active_days"], inplace=True)
 
-        return df
+        active_day_counts = df_sorted.groupby("path")["date"].transform("nunique")
+        df_sorted["days_with_commits_ratio"] = (active_day_counts / span_days).clip(0, 1).fillna(0)
+
+        all_new_cols = self.get_feature_names()
+        cols_to_merge = [col for col in all_new_cols if col in df_sorted.columns]
+
+        output_df = pd.merge(df, df_sorted[['path', 'date'] + cols_to_merge], on=['path', 'date'], how='left')
+
+        return output_df

@@ -23,7 +23,7 @@ if platform.system() == 'Windows':
 
 setup_logging()
 
-with open("config/config.yml", "r") as f:
+with open("../config/config.yml", "r") as f:
     config = yaml.safe_load(f)
 
 for project in config["projects"]:
@@ -96,7 +96,7 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
 async def main():
     shared_token_bucket = TokenBucket()
-    tasks = [process_project(project, shared_token_bucket) for project in config["project"]]
+    tasks = [process_project(project, shared_token_bucket) for project in config["projects"]]
     await asyncio.gather(*tasks)
 
 if __name__ == '__main__':

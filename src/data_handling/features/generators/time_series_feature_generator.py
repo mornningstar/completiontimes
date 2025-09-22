@@ -43,6 +43,11 @@ class TimeSeriesFeatureGenerator(AbstractFeatureGenerator):
         for lag in range(1, window + 1):
             df[f"lag_{lag}_size"] = df.groupby("path")["size"].shift(lag)
 
+        df["last_3_mean"] = df[["lag_1_size", "lag_2_size", "lag_3_size"]].mean(axis=1)
+        df["last_3_slope"] = df["lag_1_size"] - df["lag_3_size"]
+        df["last_5_slope"] = df["lag_1_size"] - df["lag_5_size"]
+        df["growth_acceleration"] = df["last_3_slope"] - df["last_5_slope"]
+
         df["recent_growth_ratio"] = df.groupby("path")["size_diff"].transform(
             lambda x: x.rolling(window=n, min_periods=1).sum() / x.cumsum()
         ).fillna(0).clip(0, 1)
