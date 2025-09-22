@@ -5,9 +5,8 @@ import os
 import platform
 
 import pandas as pd
+import yaml
 
-from config.config import CONFIG
-from config.projects import PROJECTS
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.file_repo import FileRepository
 from src.data_handling.service.sync_orchestrator import SyncOrchestrator
@@ -16,6 +15,7 @@ from src.logging_config import setup_logging
 from src.pipeline.ablation import AblationStudy
 from src.pipeline.pipeline_feature_engineering import FeatureEngineeringPipeline
 from src.pipeline.pipeline_model_training import ModelTrainingPipeline
+from src.predictions.registry import get_model_class
 from src.visualisations.model_plotting import ModelPlotter
 
 if platform.system() == 'Windows':
@@ -23,7 +23,12 @@ if platform.system() == 'Windows':
 
 setup_logging()
 
+with open("config/config.yml", "r") as f:
+    config = yaml.safe_load(f)
 
+for project in config["projects"]:
+    for model in project["models"]:
+        model["class"] = get_model_class(model["class"])
 
 async def process_project(project, token_bucket: TokenBucket = None):
     project_name = project['name']
@@ -33,7 +38,7 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
     is_ablation_study = project.get('ablation', False)
 
-    auth_token = CONFIG[0]['github_access_token']
+    auth_token = os.path.expandvars(config['github']['token'])
 
     try:
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -54,6 +59,8 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
         file_repo = FileRepository(project_name)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
+        AsyncDatabase.URI = config['mongo']['uri']
+        AsyncDatabase.DATABASE_NAME = config['mongo']['database']
         await AsyncDatabase.initialize()
 
         feature_pipeline = FeatureEngineeringPipeline(file_repo, plotter, source_directory)

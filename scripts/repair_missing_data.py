@@ -2,14 +2,18 @@ import asyncio
 import json
 import os
 
-from config.config import CONFIG
+import yaml
+
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.service.commit_sync_service import CommitSyncService
 from src.data_handling.service.file_history_service import FileHistoryService
 from src.github.http_client import GitHubClient
 
+with open("config/config.yml", "r") as f:
+    config = yaml.safe_load(f)
+
 REPO = "openedx/edx-platform"
-AUTH = CONFIG[0]["github_access_token"]
+AUTH = os.path.expandvars(config['github']['token'])
 
 async def retry_failed_commits(commit_service: CommitSyncService):
     if not os.path.exists("failed_commits.json"):

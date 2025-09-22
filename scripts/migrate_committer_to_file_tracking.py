@@ -1,13 +1,17 @@
 import asyncio
 import logging
+import os
 
-from config.config import CONFIG
+import yaml
+
 from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.database.commit_repo import CommitRepository
 from src.data_handling.database.file_repo import FileRepository
 from src.github.http_client import GitHubClient
 from src.logging_config import setup_logging
 
+with open("config/config.yml", "r") as f:
+    config = yaml.safe_load(f)
 
 async def migrate_add_committer(file_repo: FileRepository, commit_repo: CommitRepository):
     await AsyncDatabase.initialize()
@@ -44,7 +48,7 @@ if __name__ == "__main__":
 
     async def main():
         repo = "openedx/edx-platform"
-        auth = CONFIG[0]["github_access_token"]
+        auth = os.path.expandvars(config['github']['token'])
         client = GitHubClient(auth)
 
         try:
