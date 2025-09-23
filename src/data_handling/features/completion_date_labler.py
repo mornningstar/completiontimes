@@ -3,8 +3,6 @@ import logging
 import numpy as np
 import pandas as pd
 
-from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator
-
 
 class CompletionDateLabler:
     def __init__(self):

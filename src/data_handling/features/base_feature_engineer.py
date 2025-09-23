@@ -5,25 +5,16 @@ import pandas as pd
 from src.data_handling.database.file_repo import FileRepository
 from src.data_handling.features.completion_date_labler import CompletionDateLabler
 from src.data_handling.features.feature_generator_registry import feature_generator_registry
-from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator
-from src.data_handling.features.generators.change_quality_generator import ChangeQualityFeatureGenerator
-from src.data_handling.features.generators.commit_activity_feature_generator import CommitActivityFeatureGenerator
-from src.data_handling.features.generators.committer_features_generator import CommitterFeatureGenerator
-from src.data_handling.features.generators.feature_interactions_generator import FeatureInteractionsGenerator
-from src.data_handling.features.generators.metadata_generator import MetadataFeatureGenerator
-from src.data_handling.features.generators.temporal_dynamics_feature_generator import TemporalDynamicsFeatureGenerator
-from src.data_handling.features.generators.time_series_feature_generator import TimeSeriesFeatureGenerator
 from src.visualisations.model_plotting import ModelPlotter
 
-ALL_FEATURE_GENERATORS: dict[str, AbstractFeatureGenerator] = {
-    'MetaDataFeatures': MetadataFeatureGenerator(),
-    'TimeSeriesFeatures': TimeSeriesFeatureGenerator(),
-    'CommitActivityFeatures': CommitActivityFeatureGenerator(),
-    'TemporalDynamicsFeatures': TemporalDynamicsFeatureGenerator(),
-    'FeatureInteractions': FeatureInteractionsGenerator(),
-    'CommitterFeatures': CommitterFeatureGenerator(),
-    'ChangeQualityFeatures': ChangeQualityFeatureGenerator(),
-}
+# ALL_FEATURE_GENERATORS: dict[str, AbstractFeatureGenerator] = {
+#     'MetaDataFeatures': FileMetadataFeatureGenerator(),
+#     'TimeSeriesFeatures': TimeSeriesGenerator(),
+#     'CommitActivityFeatures': CommitActivityFeatureGenerator(),
+#     'TemporalDynamicsFeatures': TemporalDynamicsFeatureGenerator(),
+#     'FeatureInteractions': FeatureInteractionsGenerator(),
+#     'CommitterFeatures': CommitterFeatureGenerator(),
+# }
 
 class BaseFeatureEngineer:
 
