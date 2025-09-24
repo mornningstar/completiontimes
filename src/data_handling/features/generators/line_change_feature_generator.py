@@ -12,7 +12,7 @@ class LineChangeFeatureGenerator(AbstractFeatureGenerator):
             'cum_pure_addition', 'cum_pure_deletion'
         ]
 
-    def generate(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    def generate(self, df: pd.DataFrame, **kwargs) -> tuple[pd.DataFrame, list[str]]:
         line_change_total = df['lines_added'] + df['lines_deleted']
 
         # Ratios and purity of changes
@@ -27,4 +27,4 @@ class LineChangeFeatureGenerator(AbstractFeatureGenerator):
         df['cum_pure_addition'] = df.groupby('path')['pure_addition'].cumsum()
         df['cum_pure_deletion'] = df.groupby('path')['pure_deletion'].cumsum()
 
-        return df
+        return df, ['pure_addition', 'pure_deletion']

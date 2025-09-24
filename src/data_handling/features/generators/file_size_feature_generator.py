@@ -19,7 +19,7 @@ class FileSizeFeatureGenerator(AbstractFeatureGenerator):
             'percentage_change_size'] + [f'rolling_{self.window}_{stat}_size' for stat in self.rolling_stats] + [
             f'ema_{self.window}_size'] + [f'lag_{lag}_size' for lag in range(1, self.lags + 1)]
 
-    def generate(self, df: pd.DataFrame, window: int = 7, lags: int = 5, recent_n: int = 5, **kwargs) -> pd.DataFrame:
+    def generate(self, df: pd.DataFrame, window: int = 7, lags: int = 5, recent_n: int = 5, **kwargs) -> tuple[pd.DataFrame, list[str]]:
         self.window = window
         self.lags = lags
         self.recent_n = recent_n
@@ -64,4 +64,4 @@ class FileSizeFeatureGenerator(AbstractFeatureGenerator):
         # Replace infinite values that can arise from pct_change
         df.replace([np.inf, -np.inf], 0, inplace=True)
 
-        return df
+        return df, []

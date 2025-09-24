@@ -23,8 +23,7 @@ class RegressionModelTrainer:
 
     @staticmethod
     def get_feature_cols(file_data_df, include_size=False):
-        drop_cols = ["path", "date", "completion_date", "completion_reason", "days_until_completion", "committer",
-                     "committer_grouped"]
+        drop_cols = ["path", "date", "completion_date", "completion_reason", "days_until_completion", "committer"]
         if not include_size:
             drop_cols.append("size")
 

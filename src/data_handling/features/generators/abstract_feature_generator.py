@@ -6,8 +6,11 @@ import pandas as pd
 class AbstractFeatureGenerator(ABC):
 
     @abstractmethod
-    def generate(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        """ Generates features and adds them to the dataframe. """
+    def generate(self, df: pd.DataFrame, **kwargs) -> tuple[pd.DataFrame, list[str]]:
+        """
+        Generates features and adds them to the dataframe.
+        Returns the dataframe and a list of binary columns (to not touch them in scaling).
+        """
         pass
 
     @abstractmethod

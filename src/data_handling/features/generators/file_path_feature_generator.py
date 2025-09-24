@@ -18,7 +18,7 @@ class FilePathFeatureGenerator(AbstractFeatureGenerator):
             )
         return self.feature_names_
 
-    def generate(self, df: pd.DataFrame, top_n_ext: int = 15, **kwargs) -> pd.DataFrame:
+    def generate(self, df: pd.DataFrame, top_n_ext: int = 15, **kwargs) -> tuple[pd.DataFrame, list[str]]:
         initial_columns = set(df.columns)
 
         path_lower = df['path'].str.lower()
@@ -45,6 +45,9 @@ class FilePathFeatureGenerator(AbstractFeatureGenerator):
         df['is_github_workflow'] = path_lower.str.contains(r'\.github/workflows/').astype(int)
         df['is_readme'] = path_lower.str.contains(r'readme').astype(int)
 
+        binaries = (["in_test_dir", "in_docs_dir", "is_config_file", "is_markdown", "is_github_workflow", "is_readme"] +
+                    dummies.columns.tolist())
+
         df.drop(columns=['file_extension', 'file_extension_grouped'], inplace=True, errors='ignore')
 
         # Determine the list of newly added feature columns
@@ -53,4 +56,4 @@ class FilePathFeatureGenerator(AbstractFeatureGenerator):
 
         self.feature_names_ = new_feature_names
 
-        return df
+        return df, binaries
