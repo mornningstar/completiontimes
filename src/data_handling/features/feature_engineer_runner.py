@@ -15,13 +15,13 @@ class FeatureEngineerRunner:
         file_df = file_df[file_df["path"].str.startswith(source_directory)].copy()
 
         if isinstance(self.feature_engineer, SurvivalFeatureEngineer):
-            file_features = self.feature_engineer.engineer_features(file_df, is_static)
+            file_features, categorical_cols = self.feature_engineer.engineer_features(file_df, is_static)
             feature_cols = [col for col in file_features.select_dtypes(include="number").columns
                             if col not in ["event", "size", "cumulative_size", "duration"]]
             
             self.feature_engineer.plotter.plot_feature_correlations(file_features[feature_cols], file_features["event"])
         else:
-            file_features = self.feature_engineer.engineer_features(file_df, include_sets=include_sets)
+            file_features, categorical_cols = self.feature_engineer.engineer_features(file_df, include_sets=include_sets)
             target_series = file_features["days_until_completion"]
             feature_cols = [col for col in file_features.select_dtypes(include="number").columns
                             if col not in ["days_until_completion", "size", "cumulative_size"]]
@@ -29,4 +29,4 @@ class FeatureEngineerRunner:
 
         await self.feature_engineer.save_features_to_db(file_features)
 
-        return file_features
+        return file_features, categorical_cols

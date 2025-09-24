@@ -77,4 +77,4 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
         df["weekday"] = df["date"].dt.weekday
         df["month"] = df["date"].dt.month
 
-        return df, []
+        return df, ['is_first_commit']

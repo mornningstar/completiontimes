@@ -30,13 +30,33 @@ class RegressionModelTrainer:
         return [col for col in file_data_df.select_dtypes(include=np.number).columns if col not in drop_cols]
 
 
-    def train_and_evaluate(self, file_data_df):
+    def train_and_evaluate(self, data_tuple):
+        file_data_df, categorical_cols = data_tuple
         train_df, test_df = DataSplitter.split_by_file(file_data_df)
-        feature_cols = self.get_feature_cols(train_df)
-        self.logger.info(f"Used feature columns: {feature_cols}")
 
-        x_train = train_df[feature_cols]
-        x_test = test_df[feature_cols]
+        all_feature_cols = self.get_feature_cols(train_df)
+        numerical_cols = [col for col in all_feature_cols if col not in categorical_cols]
+
+        self.logger.info(f"Identified {len(numerical_cols)} numerical features to be scaled.")
+        self.logger.info(f"Identified {len(categorical_cols)} categorical/binary features to pass through.")
+
+        x_train_numerical = train_df[numerical_cols]
+        x_train_categorical = train_df[categorical_cols]
+
+        x_test_numerical = test_df[numerical_cols]
+        x_test_categorical = test_df[categorical_cols]
+
+        self.model.scaler.fit(x_train_numerical)
+        x_train_numerical_scaled = pd.DataFrame(self.model.scaler.transform(x_train_numerical),
+                                                index=x_train_numerical.index, columns=numerical_cols)
+        x_test_numerical_scaled = pd.DataFrame(self.model.scaler.transform(x_test_numerical),
+                                               index=x_test_numerical.index, columns=numerical_cols)
+
+        x_train = pd.concat([x_train_numerical_scaled, x_train_categorical], axis=1)
+        x_test = pd.concat([x_test_numerical_scaled, x_test_categorical], axis=1)
+
+        # Ensure column order is the same
+        x_test = x_test[x_train.columns]
 
         y_train_log = np.log1p(train_df["days_until_completion"].values)
         y_test_log = np.log1p(test_df["days_until_completion"].values)
@@ -49,11 +69,11 @@ class RegressionModelTrainer:
 
         importances = self.model.get_feature_importances()
         if importances is not None:
-            self.model_plotter.plot_model_feature_importance(feature_cols, importances)
+            self.model_plotter.plot_model_feature_importance(x_train.columns, importances)
 
         #Evaluation
-        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, feature_cols)
-        error_path = self.evaluator.perform_error_analysis(errors_df, feature_cols, self.model,
+        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, all_feature_cols)
+        error_path = self.evaluator.perform_error_analysis(errors_df, all_feature_cols, self.model,
                                                            self.model_plotter, self.output_dir, self.logger)
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")

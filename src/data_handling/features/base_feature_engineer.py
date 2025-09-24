@@ -12,16 +12,6 @@ from src.data_handling.features.generators.file_size_feature_generator import Fi
 from src.data_handling.features.generators.line_change_feature_generator import LineChangeFeatureGenerator
 from src.data_handling.features.generators.committer_feature_generator import CommitterFeatureGenerator
 
-
-# ALL_FEATURE_GENERATORS: dict[str, AbstractFeatureGenerator] = {
-#     'MetaDataFeatures': FileMetadataFeatureGenerator(),
-#     'TimeSeriesFeatures': TimeSeriesGenerator(),
-#     'CommitActivityFeatures': CommitActivityFeatureGenerator(),
-#     'TemporalDynamicsFeatures': TemporalDynamicsFeatureGenerator(),
-#     'FeatureInteractions': FeatureInteractionsGenerator(),
-#     'CommitterFeatures': CommitterFeatureGenerator(),
-# }
-
 class BaseFeatureEngineer:
 
     def __init__(self, file_repo: FileRepository, plotter: ModelPlotter, use_categorical: bool = False):
@@ -96,15 +86,17 @@ class BaseFeatureEngineer:
         if include_sets is None:
             include_sets = feature_generator_registry.get_all_names()
 
+        all_categorical_cols = []
         for group_name in include_sets:
             generator = feature_generator_registry.get(group_name)
             if generator:
                 self.logging.info(f"Generating features for: {group_name}")
-                df = generator.generate(
+                df, new_categorical_cols = generator.generate(
                     df,
                     use_categorical=self.use_categorical,
                     windows=[30, 90]
                 )
+                all_categorical_cols.extend(new_categorical_cols)
             else:
                 self.logging.warning(f"Feature group '{group_name}' not found in registry.")
 
@@ -113,4 +105,4 @@ class BaseFeatureEngineer:
         if total_files > 0:
             self.plotter.plot_completion_donut(num_completed_files, total_files)
 
-        return df
+        return df, all_categorical_cols

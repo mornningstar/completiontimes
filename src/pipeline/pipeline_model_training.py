@@ -14,6 +14,7 @@ class ModelTrainingPipeline:
     async def run(self):
         for model_cfg in self.models:
             features_to_use = await self.feature_pipeline.get_or_create_features(model_cfg)
+
             model_cls = model_cfg["class"]
             feature_type = model_cfg.get("feature_type", "regression")
             trainer_cls = TRAINER_BY_TYPE[feature_type]

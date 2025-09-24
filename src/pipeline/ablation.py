@@ -33,10 +33,10 @@ class AblationStudy:
             logging.info(f"Cache missing for {cache_key}. Generating full feature set...")
             engineer = eng_cls(self.file_repo, self.plotter, use_categorical=flag)
             runner = FeatureEngineerRunner(engineer)
-            engineered_df = await runner.run(
+            engineered_df, categorical_cols = await runner.run(
                 source_directory=self.source_directory, include_sets=feature_generator_registry.get_all_names()
             )
-            self._features_cache[cache_key] = engineered_df
+            self._features_cache[cache_key] = (engineered_df, categorical_cols)
             logging.info(f"Cached features for {cache_key} - rows = {len(engineered_df)}")
 
         return self._features_cache[cache_key]
@@ -54,7 +54,7 @@ class AblationStudy:
 
         for model_cfg in models:
             # 1. Get the master feature dataframe for this model config (e.g. regression, categorical)
-            master_df = await self._get_or_create_features(model_cfg)
+            master_df, all_categorical_cols = await self._get_or_create_features(model_cfg)
             feature_type = model_cfg.get("feature_type", "regression")
 
             for ablation in ablation_configs:
@@ -64,6 +64,8 @@ class AblationStudy:
                 # 2. Select the subset of features for this ablation run
                 columns_to_use = self._get_columns_for_ablation(master_df, ablation["include"], feature_type)
                 ablation_df = master_df[columns_to_use]
+
+                ablation_categorical_cols = [col for col in all_categorical_cols if col in ablation_df.columns]
 
                 trainer_cls = TRAINER_BY_TYPE[feature_type]
 

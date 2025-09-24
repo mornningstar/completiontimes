@@ -15,7 +15,7 @@ class RegressionFeatureEngineering(BaseFeatureEngineer):
         return ["days_until_completion"]
 
     def engineer_features(self, file_df, window=7, include_sets = None):
-        file_df = super().engineer_features(file_df, window, include_sets)
+        file_df, categorical_cols = super().engineer_features(file_df, window, include_sets)
 
         first_commit = file_df.groupby("path")["date"].transform("min")
         file_df["age_in_days"] = (file_df["date"] - first_commit).dt.days
@@ -29,4 +29,4 @@ class RegressionFeatureEngineering(BaseFeatureEngineer):
 
         file_df[numeric_cols] = file_df[numeric_cols].fillna(0.0)
 
-        return file_df
+        return file_df, categorical_cols
