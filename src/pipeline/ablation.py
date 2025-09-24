@@ -103,7 +103,7 @@ class AblationStudy:
         for group_name in include_groups:
             generator = feature_generator_registry.get(group_name)
             if generator:
-                feature_names = generator.get_feature_names()
+                feature_names = generator.get_feature_names(df)
                 for item in feature_names:
                     if item.endswith('_'):
                         selected_cols.update(df.columns[df.columns.str.startswith(item)])

@@ -13,7 +13,7 @@ class FileSizeFeatureGenerator(AbstractFeatureGenerator):
         self.recent_n = None
         self.rolling_stats = ['mean', 'std', 'max', 'min', 'median']
 
-    def get_feature_names(self) -> list[str]:
+    def get_feature_names(self, df: pd.DataFrame) -> list[str]:
         return [
             'size_diff', 'cumulative_size', 'cumulative_mean_size', 'cumulative_std_size', 'recent_growth_ratio',
             'percentage_change_size'] + [f'rolling_{self.window}_{stat}_size' for stat in self.rolling_stats] + [

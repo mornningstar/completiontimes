@@ -6,21 +6,25 @@ from src.data_handling.features.generators.abstract_feature_generator import Abs
 
 @feature_generator_registry.register
 class FilePathFeatureGenerator(AbstractFeatureGenerator):
-    def __init__(self):
-        super().__init__()
-        self.feature_names_ = None
+    def get_feature_names(self, df: pd.DataFrame) -> list[str]:
+        # Static binary flags that are always created
+        feature_names = [
+            'path_depth', 'in_test_dir', 'in_docs_dir', 'is_config_file',
+            'is_markdown', 'is_github_workflow', 'is_readme'
+        ]
 
-    def get_feature_names(self) -> list[str]:
-        if self.feature_names_ is None:
-            raise RuntimeError(
-                "The 'generate' method must be called before 'get_feature_names' "
-                "to determine the dynamic feature names."
-            )
-        return self.feature_names_
+        if 'path' in df.columns:
+            file_extension = df['path'].str.extract(r'\.([a-zA-Z0-9]+)$')[0].fillna('no_ext')
+            ext_counts = file_extension.value_counts()
+            top_exts = ext_counts.head(15).index
+
+            extension_features = [f"ext_{ext}" for ext in top_exts]
+            extension_features.append("ext_other")
+            feature_names.extend(extension_features)
+
+        return feature_names
 
     def generate(self, df: pd.DataFrame, top_n_ext: int = 15, **kwargs) -> tuple[pd.DataFrame, list[str]]:
-        initial_columns = set(df.columns)
-
         path_lower = df['path'].str.lower()
 
         # Basic path features
@@ -49,11 +53,5 @@ class FilePathFeatureGenerator(AbstractFeatureGenerator):
                     dummies.columns.tolist())
 
         df.drop(columns=['file_extension', 'file_extension_grouped'], inplace=True, errors='ignore')
-
-        # Determine the list of newly added feature columns
-        final_columns = set(df.columns)
-        new_feature_names = list(final_columns - initial_columns)
-
-        self.feature_names_ = new_feature_names
 
         return df, binaries

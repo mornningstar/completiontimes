@@ -5,27 +5,25 @@ from src.data_handling.features.generators.abstract_feature_generator import Abs
 
 @feature_generator_registry.register
 class CommitterFeatureGenerator(AbstractFeatureGenerator):
-    def __init__(self):
-        super().__init__()
-        self.feature_names_ = None
+    def get_feature_names(self, df: pd.DataFrame) -> list[str]:
+        significant_committers = self._get_significant_committers(df)
+        if significant_committers.empty:
+            return []
+        feature_names = [f"committer_{name}" for name in significant_committers]
+        feature_names.append("committer_other")
+        return feature_names
 
-    def get_feature_names(self) -> list[str]:
-        if self.feature_names_ is None:
-            raise RuntimeError(
-                "The 'generate' method must be called before 'get_feature_names' "
-                "to determine the dynamic feature names."
-            )
-        return self.feature_names_
-
-    def generate(self, df: pd.DataFrame, **kwargs) -> tuple[pd.DataFrame, list[str]]:
+    def _get_significant_committers(self, df: pd.DataFrame):
         if 'committer' not in df.columns:
-            return df
-
-        initial_columns = set(df.columns)
-
+            return pd.Index([])
         commit_counts = df['committer'].value_counts()
         total_commits = len(df)
-        significant_committers = commit_counts[commit_counts / total_commits >= 0.01].index
+        return commit_counts[commit_counts / total_commits >= 0.01].index
+
+    def generate(self, df: pd.DataFrame, **kwargs) -> tuple[pd.DataFrame, list[str]]:
+        significant_committers = self._get_significant_committers(df)
+        if significant_committers.empty:
+            return df, []
 
         df['committer_grouped'] = df['committer'].apply(
             lambda x: x if x in significant_committers else 'other'
@@ -35,7 +33,4 @@ class CommitterFeatureGenerator(AbstractFeatureGenerator):
         df = pd.concat([df, dummies], axis=1)
         df.drop(columns=['committer', 'committer_grouped'], inplace=True, errors='ignore')
 
-        final_columns = set(df.columns)
-        self.feature_names_ = list(final_columns - initial_columns)
-
-        return df, self.feature_names_
+        return df, dummies.columns.tolist()

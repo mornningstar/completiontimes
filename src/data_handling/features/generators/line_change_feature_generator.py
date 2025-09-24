@@ -6,7 +6,7 @@ from src.data_handling.features.generators.abstract_feature_generator import Abs
 
 @feature_generator_registry.register
 class LineChangeFeatureGenerator(AbstractFeatureGenerator):
-    def get_feature_names(self) -> list[str]:
+    def get_feature_names(self, df: pd.DataFrame) -> list[str]:
         return [
             'add_ratio', 'pure_addition', 'pure_deletion', 'cum_lines_added', 'cum_lines_deleted', 'cum_line_change',
             'cum_pure_addition', 'cum_pure_deletion'
