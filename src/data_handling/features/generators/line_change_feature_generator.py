@@ -13,21 +13,18 @@ class LineChangeFeatureGenerator(AbstractFeatureGenerator):
         ]
 
     def generate(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
-        df_sorted = df[['path', 'date', 'lines_added', 'lines_deleted']].copy()
-        df_sorted.sort_values(['path', 'date'], inplace=True)
-
-        line_change_total = df_sorted['lines_added'] + df_sorted['lines_deleted']
+        line_change_total = df['lines_added'] + df['lines_deleted']
 
         # Ratios and purity of changes
-        df_sorted['add_ratio'] = (df_sorted['lines_added'] / line_change_total.replace(0, 1e-9)).fillna(0)
-        df_sorted['pure_addition'] = ((df_sorted['lines_added'] > 0) & (df_sorted['lines_deleted'] == 0)).astype(int)
-        df_sorted['pure_deletion'] = ((df_sorted['lines_deleted'] > 0) & (df_sorted['lines_added'] == 0)).astype(int)
+        df['add_ratio'] = (df['lines_added'] / line_change_total.replace(0, 1e-9)).fillna(0)
+        df['pure_addition'] = ((df['lines_added'] > 0) & (df['lines_deleted'] == 0)).astype(int)
+        df['pure_deletion'] = ((df['lines_deleted'] > 0) & (df['lines_added'] == 0)).astype(int)
 
         # Cumulative counts of change types
-        df_sorted['cum_lines_added'] = df_sorted.groupby('path')['lines_added'].cumsum()
-        df_sorted['cum_lines_deleted'] = df_sorted.groupby('path')['lines_deleted'].cumsum()
-        df_sorted['cum_line_change'] = df_sorted['cum_lines_added'] + df_sorted['cum_lines_deleted']
-        df_sorted['cum_pure_addition'] = df_sorted.groupby('path')['pure_addition'].cumsum()
-        df_sorted['cum_pure_deletion'] = df_sorted.groupby('path')['pure_deletion'].cumsum()
+        df['cum_lines_added'] = df.groupby('path')['lines_added'].cumsum()
+        df['cum_lines_deleted'] = df.groupby('path')['lines_deleted'].cumsum()
+        df['cum_line_change'] = df['cum_lines_added'] + df['cum_lines_deleted']
+        df['cum_pure_addition'] = df.groupby('path')['pure_addition'].cumsum()
+        df['cum_pure_deletion'] = df.groupby('path')['pure_deletion'].cumsum()
 
-        return df_sorted
+        return df

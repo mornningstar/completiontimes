@@ -54,7 +54,8 @@ class RegressionModelTrainer:
 
         #Evaluation
         y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, feature_cols)
-        error_path = self.evaluator.perform_error_analysis(errors_df, feature_cols)
+        error_path = self.evaluator.perform_error_analysis(errors_df, feature_cols, self.model,
+                                                           self.model_plotter, self.output_dir, self.logger)
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)
