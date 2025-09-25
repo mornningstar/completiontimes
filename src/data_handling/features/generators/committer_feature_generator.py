@@ -31,6 +31,6 @@ class CommitterFeatureGenerator(AbstractFeatureGenerator):
 
         dummies = pd.get_dummies(df['committer_grouped'], prefix='committer')
         df = pd.concat([df, dummies], axis=1)
-        df.drop(columns=['committer', 'committer_grouped'], inplace=True, errors='ignore')
+        df.drop(columns=['committer'], inplace=True, errors='ignore')
 
         return df, dummies.columns.tolist()

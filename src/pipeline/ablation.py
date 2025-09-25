@@ -77,7 +77,7 @@ class AblationStudy:
                 trainer = trainer_cls(self.project_name, model_cfg["class"], ablation_images_dir, ablation_models_dir)
 
                 # 3. Train the model on the subset of features
-                training_result = trainer.train_and_evaluate(ablation_df)
+                training_result = trainer.train_and_evaluate((ablation_df, ablation_categorical_cols))
 
                 result_data = {
                     "project": self.project_name,

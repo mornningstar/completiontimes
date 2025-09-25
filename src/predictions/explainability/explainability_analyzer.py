@@ -79,7 +79,11 @@ class ExplainabilityAnalyzer:
         mae_by_ext, std_by_ext = get_error_stats("extension")
         mae_by_dir, std_by_dir = get_error_stats("top_dir")
         mae_by_reason, std_by_reason = get_error_stats("completion_reason")
-        mae_by_committer, std_by_committer = get_error_stats("committer_grouped")
+        if "committer_grouped" in errors_df.columns:
+            mae_by_committer, std_by_committer = get_error_stats("committer_grouped")
+        else:
+            mae_by_committer, std_by_committer = (None, None)
+
         mae_by_bins, std_by_bins = get_error_stats("true_bin")
 
         self.model_plotter.plot_bar(mae_by_ext, title="MAE per file type", xlabel="File Extension", ylabel="MAE",
@@ -88,7 +92,8 @@ class ExplainabilityAnalyzer:
                                     ylabel="MAE", yerr=std_by_dir, filename="mae_per_top_dir.png")
         self.model_plotter.plot_bar(mae_by_reason, title="MAE per mixins reason", xlabel="Completion Reason",
                                     ylabel="MAE", yerr=std_by_reason, filename="mae_per_completion_reason.png")
-        self.model_plotter.plot_bar(mae_by_committer, title="MAE per Committer", xlabel="Committer", ylabel="MAE",
-                                    yerr=std_by_committer, filename="mae_per_committer.png")
+        if mae_by_committer is not None:
+            self.model_plotter.plot_bar(mae_by_committer, title="MAE per Committer", xlabel="Committer", ylabel="MAE",
+                                        yerr=std_by_committer, filename="mae_per_committer.png")
         self.model_plotter.plot_bar(mae_by_bins, title="MAE per actual mixins days", xlabel="Completion days bins",
                                     ylabel="MAE", yerr=std_by_bins, filename="mae_per_completion_bins.png")

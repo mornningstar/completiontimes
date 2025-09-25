@@ -4,6 +4,9 @@ import logging
 import os
 import platform
 
+from dotenv import load_dotenv
+load_dotenv(dotenv_path='../config/.env')
+
 import pandas as pd
 import yaml
 
@@ -48,6 +51,12 @@ async def process_project(project, token_bucket: TokenBucket = None):
         images_dir = os.path.join(run_output_dir, "images")
         logging.info("images_dir: {}".format(images_dir))
         models_dir = os.path.join(run_output_dir, "models")
+
+        file_repo = FileRepository(project_name)
+        plotter = ModelPlotter(project_name, images_dir=images_dir)
+        AsyncDatabase.URI = config['mongo']['uri']
+        AsyncDatabase.DATABASE_NAME = config['mongo']['database']
+        await AsyncDatabase.initialize()
         
         if get_newest:
             orchestrator = SyncOrchestrator(auth_token, project_name, token_bucket)
@@ -56,12 +65,6 @@ async def process_project(project, token_bucket: TokenBucket = None):
             logging.debug("Finished calling synchronised orchestrator")
         else:
             logging.info("Skipping fetch of new commit history")
-
-        file_repo = FileRepository(project_name)
-        plotter = ModelPlotter(project_name, images_dir=images_dir)
-        AsyncDatabase.URI = config['mongo']['uri']
-        AsyncDatabase.DATABASE_NAME = config['mongo']['database']
-        await AsyncDatabase.initialize()
 
         feature_pipeline = FeatureEngineeringPipeline(file_repo, plotter, source_directory)
 

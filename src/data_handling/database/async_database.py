@@ -5,13 +5,14 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 
 class AsyncDatabase:
-    URI = "mongodb://localhost:27017"
+    URI = None
     DATABASE = None
+    DATABASE_NAME = None
 
     @staticmethod
     async def initialize():
         client = AsyncIOMotorClient(AsyncDatabase.URI)
-        AsyncDatabase.DATABASE = client['github_data']
+        AsyncDatabase.DATABASE = client[AsyncDatabase.DATABASE_NAME]
 
     @staticmethod
     async def fetch_all(collection, query=None, projection=None):

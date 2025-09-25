@@ -55,24 +55,24 @@ class RegressionModelTrainer:
         x_train = pd.concat([x_train_numerical_scaled, x_train_categorical], axis=1)
         x_test = pd.concat([x_test_numerical_scaled, x_test_categorical], axis=1)
 
+        self.logger.info(f"Length of x_train: {len(x_train.columns)}; Length of x_test: {len(x_test.columns)}")
+
         # Ensure column order is the same
         x_test = x_test[x_train.columns]
+        final_feature_cols = x_train.columns.tolist()
 
         y_train_log = np.log1p(train_df["days_until_completion"].values)
         y_test_log = np.log1p(test_df["days_until_completion"].values)
-        
-        self.logger.debug(f"Length of x_train: {len(x_train)}")
-        self.logger.debug(f"Length of y_train: {len(y_train_log)}")
 
         groups = train_df["path"].values
         self.model.train(x_train, y_train_log, groups=groups)
 
         importances = self.model.get_feature_importances()
         if importances is not None:
-            self.model_plotter.plot_model_feature_importance(x_train.columns, importances)
+            self.model_plotter.plot_model_feature_importance(final_feature_cols, importances)
 
         #Evaluation
-        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, all_feature_cols)
+        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, final_feature_cols)
         error_path = self.evaluator.perform_error_analysis(errors_df, all_feature_cols, self.model,
                                                            self.model_plotter, self.output_dir, self.logger)
 
