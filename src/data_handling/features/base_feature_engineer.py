@@ -14,12 +14,11 @@ from src.data_handling.features.generators.committer_feature_generator import Co
 
 class BaseFeatureEngineer:
 
-    def __init__(self, file_repo: FileRepository, plotter: ModelPlotter, use_categorical: bool = False):
+    def __init__(self, file_repo: FileRepository, plotter: ModelPlotter):
         super().__init__()
 
         self.file_repo = file_repo
         self.plotter = plotter
-        self.use_categorical = use_categorical
         self.logging = logging.getLogger(self.__class__.__name__)
         self.completion_labler = CompletionDateLabler()
 
@@ -93,7 +92,6 @@ class BaseFeatureEngineer:
                 self.logging.info(f"Generating features for: {group_name}")
                 df, new_categorical_cols = generator.generate(
                     df,
-                    use_categorical=self.use_categorical,
                     windows=[30, 90]
                 )
                 all_categorical_cols.extend(new_categorical_cols)

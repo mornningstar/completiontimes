@@ -1,10 +1,12 @@
 import logging
 
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import shap
 from lifelines import KaplanMeierFitter
 from matplotlib import pyplot as plt
+from sklearn.model_selection import learning_curve
 
 from src.visualisations.plotting import Plotter
 
@@ -58,6 +60,7 @@ class ModelPlotter(Plotter):
         fig, ax = plt.subplots()
         ax.pie(sizes, labels=labels, startangle=90, autopct='%1.1f%%', wedgeprops={'width': 0.3})
         ax.set_title('Completed Files')
+        plt.tight_layout()
 
         self.save_plot(f"completed_files_donut.png")
 
@@ -111,6 +114,7 @@ class ModelPlotter(Plotter):
                         ylabel="Features")
         sns.barplot(x=corr.values, y=corr.index, orient="h")
         plt.subplots_adjust(left=0.1)
+        plt.tight_layout()
         self.save_plot("feature_correlations.png")
 
     def plot_model_feature_importance(self, feature_names, importances, top_n=20):
@@ -139,7 +143,6 @@ class ModelPlotter(Plotter):
     def plot_shap_bar(self, shap_values_row, feature_names, title: str = None):
         self._init_plot()
         shap.bar_plot(shap_values_row, feature_names=feature_names, show=False)
-        plt.tight_layout()
         if title:
             plt.title(title)
         self.save_plot("top_shap_bar.png")
@@ -148,7 +151,6 @@ class ModelPlotter(Plotter):
         self._init_plot(title="Distribution of Predicted Risks", xlabel="Predicted risk (lower = longer survival)", 
                         ylabel="Number of files")
         plt.hist(df[risk_col], bins=30)
-        plt.tight_layout()
         self.save_plot("survival_risk_hist.png")
     
     def plot_kaplan_meier_by_risk_group(self, df, risk_col, event_col, duration_col):
@@ -166,7 +168,6 @@ class ModelPlotter(Plotter):
 
         plt.legend(title="Predicted Risk Group")
         plt.grid(True)
-        plt.tight_layout()
         self.save_plot("km_by_risk_group.png")
 
     def plot_calibration_curve(self, observed, predicted, horizon):
@@ -176,3 +177,17 @@ class ModelPlotter(Plotter):
         plt.plot([0, 1], [0, 1], "--", label="Ideal")
         plt.legend()
         self.save_plot("survival_calibration_curve.png")
+
+    def plot_learning_curves(self, estimator, X, y, groups=None, cv=5):
+        train_sizes, train_scores, validation_scores = learning_curve(
+            estimator, X, y, groups=groups, cv=cv, scoring='neg_mean_squared_error', n_jobs=-1
+        )
+
+        train_scores_mean = -np.mean(train_scores, axis=1)
+        validation_scores_mean = -np.mean(validation_scores, axis=1)
+
+        self._init_plot(title="Learning Curves", xlabel="Training examples", ylabel="Score")
+        plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
+        plt.plot(train_sizes, validation_scores_mean, 'o-', color="g", label="Cross-validation score")
+        plt.legend(loc="best")
+        self.save_plot("learning_curves.png")

@@ -19,7 +19,7 @@ class LightGBMModel(BaseModel):
         self.auto_tune_flag = auto_tune
 
     def auto_tune(self, x_train, y_train, groups, n_trials = 75, cv = 5):
-        self.logger.info("Starting hyperparameter tuning...")
+        self.logger.info("Starting LightGBM hyperparameter tuning...")
 
         unique_groups = np.unique(groups)
         num_groups = len(unique_groups)
@@ -41,12 +41,9 @@ class LightGBMModel(BaseModel):
                 'reg_alpha': trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True),
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
 
-                'objective': trial.suggest_categorical('objective', ['quantile', 'regression', 'regression_l1']),
+                'objective': 'regression',
                 'random_state': 42
             }
-
-            if trial_params['objective'] == 'quantile':
-                trial_params['alpha'] = 0.5
 
             maes = []
 
@@ -67,11 +64,7 @@ class LightGBMModel(BaseModel):
         study.optimize(objective, n_trials=n_trials)
         elapsed_time = time.time() - start_time
 
-        best_objective = study.best_params.get('objective', 'regression')
-
         final_params = {**study.best_params, 'random_state': 42}
-        if final_params['objective'] == 'quantile':
-            final_params['alpha'] = 0.5
 
         self.model = LGBMRegressor(**final_params)
         self.logger.info(f"Best score: {study.best_value:.4f}")
@@ -81,6 +74,7 @@ class LightGBMModel(BaseModel):
         return study.best_params
 
     def train(self, x_train, y_train, groups = None):
+        self.logger.info("LightGBM: Training model..")
         if self.auto_tune_flag:
             self.logger.info("Tuning hyperparameters with Optuna...")
             self.auto_tune(x_train, y_train, groups)

@@ -6,8 +6,8 @@ from src.data_handling.features.base_feature_engineer import BaseFeatureEngineer
 
 
 class RegressionFeatureEngineering(BaseFeatureEngineer):
-    def __init__(self, file_repo, plotter, use_categorical):
-        super().__init__(file_repo, plotter, use_categorical)
+    def __init__(self, file_repo, plotter):
+        super().__init__(file_repo, plotter)
         self.logging = logging.getLogger(self.__class__.__name__)
 
     @staticmethod

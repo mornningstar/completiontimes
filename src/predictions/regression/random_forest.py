@@ -61,7 +61,7 @@ class RandomForestModel(BaseModel):
         return study.best_params
 
     def train(self, x_train, y_train, groups=None):
-        self.logger.info("RandomForest - Training model..")
+        self.logger.info("RandomForest: Training model..")
 
         if self.auto_tune_flag:
             if groups is None:

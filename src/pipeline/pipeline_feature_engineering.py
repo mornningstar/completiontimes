@@ -15,18 +15,17 @@ class FeatureEngineeringPipeline:
         self._features_cache: Dict[Tuple[Type, bool], pd.DataFrame] = {}
 
     async def get_or_create_features(self, model_cfg: dict):
-        flag = model_cfg.get("use_categorical", False)
         feature_type = model_cfg.get("feature_type", "regression")
         eng_cls = ENGINEER_BY_TYPE[feature_type]
 
-        cache_key = (eng_cls, flag)
+        cache_key = eng_cls
         if cache_key not in self._features_cache:
-            engineer = eng_cls(self.file_repo, self.plotter, use_categorical=flag)
+            engineer = eng_cls(self.file_repo, self.plotter)
             runner = FeatureEngineerRunner(engineer)
             engineered_df = await runner.run(source_directory=self.source_directory)
             self._features_cache[cache_key] = engineered_df
             logging.info(
-                f"Computed features with {eng_cls.__name__} (use_categorical={flag}) - rows={len(engineered_df)}"
+                f"Computed features with {eng_cls.__name__} - rows={len(engineered_df)}"
             )
 
         return self._features_cache[cache_key]

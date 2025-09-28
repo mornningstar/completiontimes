@@ -3,6 +3,7 @@ from src.predictions.baselines.median_base_model import MedianBaseModel
 from src.predictions.lightgbm_model import LightGBMModel
 from src.predictions.regression.gradient_boosting import GradientBoosting
 from src.predictions.regression.random_forest import RandomForestModel
+from src.predictions.regression.xgboost import XGBoostModel
 
 MODEL_REGISTRY = {
     "LinearRegressionModel": LinearRegressionModel,
@@ -10,6 +11,7 @@ MODEL_REGISTRY = {
     "LightGBMModel": LightGBMModel,
     "RandomForestModel": RandomForestModel,
     "GradientBoosting": GradientBoosting,
+    "XGBoostModel": XGBoostModel,
 }
 
 def get_model_class(class_name: str):

@@ -24,14 +24,13 @@ class AblationStudy:
         Efficiently gets or creates the full feature set for a given model configuration.
         Caches the result to avoid re-computation.
         """
-        flag = model_cfg.get("use_categorical", False)
         feature_type = model_cfg.get("feature_type", "regression")
         eng_cls = ENGINEER_BY_TYPE[feature_type]
 
-        cache_key = (eng_cls, flag)
+        cache_key = eng_cls
         if cache_key not in self._features_cache:
             logging.info(f"Cache missing for {cache_key}. Generating full feature set...")
-            engineer = eng_cls(self.file_repo, self.plotter, use_categorical=flag)
+            engineer = eng_cls(self.file_repo, self.plotter)
             runner = FeatureEngineerRunner(engineer)
             engineered_df, categorical_cols = await runner.run(
                 source_directory=self.source_directory, include_sets=feature_generator_registry.get_all_names()

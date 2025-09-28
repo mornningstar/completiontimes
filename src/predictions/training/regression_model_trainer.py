@@ -42,7 +42,6 @@ class RegressionModelTrainer:
 
         x_train_numerical = train_df[numerical_cols]
         x_train_categorical = train_df[categorical_cols]
-
         x_test_numerical = test_df[numerical_cols]
         x_test_categorical = test_df[categorical_cols]
 
@@ -67,13 +66,16 @@ class RegressionModelTrainer:
         groups = train_df["path"].values
         self.model.train(x_train, y_train_log, groups=groups)
 
-        importances = self.model.get_feature_importances()
-        if importances is not None:
-            self.model_plotter.plot_model_feature_importance(final_feature_cols, importances)
+        if self.model.model is not None:
+            self.model_plotter.plot_learning_curves(self.model.model, x_train, y_train_log, groups=groups)
+
+            importances = self.model.get_feature_importances()
+            if importances is not None:
+                self.model_plotter.plot_model_feature_importance(final_feature_cols, importances)
 
         #Evaluation
         y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, final_feature_cols)
-        error_path = self.evaluator.perform_error_analysis(errors_df, all_feature_cols, self.model,
+        error_path = self.evaluator.perform_error_analysis(errors_df, final_feature_cols, self.model,
                                                            self.model_plotter, self.output_dir, self.logger)
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")

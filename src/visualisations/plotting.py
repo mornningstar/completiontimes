@@ -1,6 +1,8 @@
 import logging
 import os
 
+import seaborn as sns
+
 from matplotlib import pyplot as plt
 
 
@@ -21,6 +23,8 @@ class Plotter:
     @staticmethod
     def _init_plot(title=None, xlabel=None, ylabel=None, figsize=(12, 6)):
         plt.figure(figsize=figsize)
+        plt.tight_layout()
+
         if title: plt.title(title)
         if xlabel: plt.xlabel(xlabel)
         if ylabel: plt.ylabel(ylabel)
@@ -31,7 +35,6 @@ class Plotter:
         self._init_plot(title=title, xlabel=xlabel, ylabel=ylabel, figsize=(10, 6))
 
         series.plot(kind='bar', rot=rotation, yerr=yerr)
-        plt.tight_layout()
 
         if filename is None:
             filename = f"{title.lower().replace(' ', '_')}.png"
@@ -42,3 +45,11 @@ class Plotter:
         """Helper function to save the current plot to the project directory."""
         plt.savefig(os.path.join(self.images_dir, filename))
         plt.close()
+
+    def plot_violin(self, data, x, y, title, xlabel, ylabel, filename=None):
+        self._init_plot(title=title, xlabel=xlabel, ylabel=ylabel)
+        sns.violinplot(x=x, y=y, data=data)
+
+        if filename is None:
+            filename = f"{title.lower().replace(' ', '_')}.png"
+        self.save_plot(filename)
