@@ -15,7 +15,7 @@ class XGBoostModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mea', n_trials=100, timeout=None):
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=100, timeout=None):
         self.logger.info("Starting XGBoost hyperparameter tuning...")
 
         unique_groups = np.unique(groups)

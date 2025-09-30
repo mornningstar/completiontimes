@@ -20,7 +20,7 @@ class GradientBoosting(BaseModel):
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials = 150, timeout = None):
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials = 100, timeout = None):
         self.logger.info("GradientBoosting - Starting hyperparameter tuning...")
 
         unique_groups = np.unique(groups)
@@ -32,12 +32,15 @@ class GradientBoosting(BaseModel):
 
         def objective(trial):
             param_grid = {
+                "loss": "squared_error",
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
-                "n_estimators": trial.suggest_int("n_estimators", 100, 500),
+                "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
                 "max_depth": trial.suggest_int("max_depth", 3, 10),
                 "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),
                 "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 5),
                 "max_features": trial.suggest_categorical("max_features", ["sqrt", "log2", 0.3, 0.5]),
+                "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+                'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.2)
             }
 
             model = GradientBoostingRegressor(random_state=42, **param_grid)

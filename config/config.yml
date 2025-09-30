@@ -6,23 +6,23 @@ mongo:
     database: "github_data"
 
 projects:
-  - name: 'flairNLP/fundus'
-    source_directory: 'src'
-    get_newest: False
-    ablation: True
-    models:
-      - class: LinearRegressionModel
-        feature_type: regression
-      - class: MedianBaseModel
-        feature_type: regression
-      - class: LightGBMModel
-        feature_type: regression
-      - class: RandomForestModel
-        feature_type: regression
-      - class: GradientBoosting
-        feature_type: regression
-      - class: XGBoostModel
-        feature_type: regression
+#  - name: 'flairNLP/fundus'
+#    source_directory: 'src'
+#    get_newest: False
+#    ablation: True
+#    models:
+#      - class: LinearRegressionModel
+#        feature_type: regression
+#      - class: MedianBaseModel
+#        feature_type: regression
+#      - class: LightGBMModel
+#        feature_type: regression
+#      - class: RandomForestModel
+#        feature_type: regression
+#      - class: GradientBoosting
+#        feature_type: regression
+#      - class: XGBoostModel
+#        feature_type: regression
 
 #  - name: 'khoj-ai/khoj'
 #    source_directory: 'src'
@@ -41,25 +41,25 @@ projects:
 #        feature_type: regression
 #      - class: XGBoostModel
 #        feature_type: regression
-#
-#  - name: 'vuejs/core'
-#    source_directory: 'packages'
-#    get_newest: True
-#    ablation: True
-#    models:
-#      - class: LinearRegressionModel
-#        feature_type: regression
-#      - class: MedianBaseModel
-#        feature_type: regression
-#      - class: LightGBMModel
-#        feature_type: regression
-#      - class: RandomForestModel
-#        feature_type: regression
-#      - class: GradientBoosting
-#        feature_type: regression
-#      - class: XGBoostModel
-#        feature_type: regression
-#
+
+  - name: 'vuejs/core'
+    source_directory: 'packages'
+    get_newest: True
+    ablation: True
+    models:
+      - class: LinearRegressionModel
+        feature_type: regression
+      - class: MedianBaseModel
+        feature_type: regression
+      - class: LightGBMModel
+        feature_type: regression
+      - class: RandomForestModel
+        feature_type: regression
+      - class: GradientBoosting
+        feature_type: regression
+      - class: XGBoostModel
+        feature_type: regression
+
 #  - name: 'mozilla/addons-server'
 #    source_directory: 'src'
 #    get_newest: True

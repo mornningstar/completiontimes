@@ -15,7 +15,7 @@ class RandomForestModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=150,
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=100,
                   timeout=None):
         self.logger.info("Starting hyperparameter tuning...")
 
@@ -28,13 +28,13 @@ class RandomForestModel(BaseModel):
 
         def objective(trial):
             params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
-                'max_depth': trial.suggest_int('max_depth', 5, 50, step=5),
+                'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
+                'max_depth': trial.suggest_int('max_depth', 5, 30, step=5),
                 'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
                 'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 10),
                 'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5, None]),
                 'bootstrap': trial.suggest_categorical('bootstrap', [True, False]),
-                'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.05),
+                'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.2),
             }
 
             if params['bootstrap']:

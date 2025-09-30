@@ -18,7 +18,7 @@ class LightGBMModel(BaseModel):
         self.model = None
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, n_trials = 75, cv = 5):
+    def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5):
         self.logger.info("Starting LightGBM hyperparameter tuning...")
 
         unique_groups = np.unique(groups)
@@ -29,9 +29,11 @@ class LightGBMModel(BaseModel):
 
         def objective(trial):
             trial_params = {
-                'n_estimators': trial.suggest_int('n_estimators', 200, 3000),
-                'learning_rate': trial.suggest_float('learning_rate', 1e-3, 0.1, log=True),
-                'num_leaves': trial.suggest_int('num_leaves', 31, 512),
+                'objective': 'regression',
+                'metric': 'mse',
+                'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+                'num_leaves': trial.suggest_int('num_leaves', 31, 256),
                 'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
                 'min_child_weight': trial.suggest_float('min_child_weight', 1e-3, 10.0, log=True),
                 'min_split_gain': trial.suggest_float('min_split_gain', 0.0, 0.3),
@@ -40,8 +42,6 @@ class LightGBMModel(BaseModel):
                 'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
                 'reg_alpha': trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True),
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
-
-                'objective': 'regression',
                 'random_state': 42
             }
 
@@ -53,7 +53,7 @@ class LightGBMModel(BaseModel):
                 m = LGBMRegressor(**trial_params, verbose=-1)
                 m.fit(X_train, Y_train,
                       eval_set=[(X_val, Y_val)],
-                      eval_metric="mae",
+                      eval_metric="mse",
                       callbacks=[lightgbm.early_stopping(stopping_rounds=75)])
                 preds = m.predict(X_val)
                 maes.append(mean_absolute_error(Y_val, preds))
