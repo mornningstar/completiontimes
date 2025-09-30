@@ -22,18 +22,6 @@ class BaseFeatureEngineer:
         self.logging = logging.getLogger(self.__class__.__name__)
         self.completion_labler = CompletionDateLabler()
 
-    @staticmethod
-    def select_snapshots(df, every="7D"):
-        df = df.sort_values(["path", "date"])
-        df["snapshot_bin"] = df["date"].dt.floor(every)
-        latest_per_bin = (
-            df.groupby(["path", "snapshot_bin"])
-            .tail(1)
-            .reset_index(drop=True)
-            .drop(columns=["snapshot_bin"])
-        )
-        return latest_per_bin
-
     async def save_features_to_db(self, file_features):
         """
         Save the computed features back to the database.

@@ -47,7 +47,6 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
 
         # Basic commit counts
         df['commit_num'] = df.groupby('path').cumcount() + 1
-        df['total_commits'] = df.groupby('path')['commit_num'].transform('max')
 
         # Time-windowed commit counts
         window_counts = df.groupby('path', group_keys=False).apply(_calculate_commits_in_windows)
