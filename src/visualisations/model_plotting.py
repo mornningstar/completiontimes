@@ -8,6 +8,8 @@ from lifelines import KaplanMeierFitter
 from matplotlib import pyplot as plt
 from sklearn.model_selection import learning_curve
 
+from config import globals
+
 from src.visualisations.plotting import Plotter
 
 
@@ -124,6 +126,7 @@ class ModelPlotter(Plotter):
 
         self._init_plot(title="Top Feature Importances (Model)", xlabel="Importance")
         sns.barplot(x=sorted_values, y=sorted_names)
+        plt.tight_layout()
         self.save_plot("feature_importance.png")
 
     def plot_error_types_pie(self, error_types):
@@ -180,7 +183,7 @@ class ModelPlotter(Plotter):
 
     def plot_learning_curves(self, estimator, X, y, groups=None, cv=5):
         train_sizes, train_scores, validation_scores = learning_curve(
-            estimator, X, y, groups=groups, cv=cv, scoring='neg_mean_squared_error', n_jobs=-1
+            estimator, X, y, groups=groups, cv=cv, scoring='neg_mean_squared_error', n_jobs=globals.CPU_LIMIT
         )
 
         train_scores_mean = -np.mean(train_scores, axis=1)

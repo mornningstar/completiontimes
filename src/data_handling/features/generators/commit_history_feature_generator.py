@@ -13,7 +13,7 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
 
     def get_feature_names(self, df: pd.DataFrame) -> list[str]:
         return [
-            'commit_num', 'total_commits', 'commit_interval_days', 'is_first_commit',
+            'commit_num', 'commit_interval_days', 'is_first_commit',
             'std_commit_interval', 'avg_commit_interval', 'weekday', 'month'
         ] + [f'commits_last_{w}d' for w in self.windows] + [f'commits_ratio_{w}d' for w in self.windows]
 
@@ -54,7 +54,7 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
 
         for window in windows:
             col_name = f"commits_last_{window}d"
-            df[f"commits_ratio_{window}d"] = (df[col_name] / df["total_commits"]).fillna(0)
+            df[f"commits_ratio_{window}d"] = (df[col_name] / df["commit_num"]).fillna(0)
 
         if len(windows) >= 2:
             df["recent_commit_activity_surge"] = (
@@ -69,10 +69,16 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
         # Expanding statistics on commit intervals
         expanding_std = df.groupby("path")["commit_interval_days"].expanding().std()
         df["std_commit_interval"] = expanding_std.reset_index(level=0, drop=True).fillna(0)
-        df["avg_commit_interval"] = df.groupby("path")["commit_interval_days"].transform("mean").fillna(
-            0)
+        df["avg_commit_interval"] = (df.groupby("path")["commit_interval_days"].expanding().mean().
+                                     reset_index(level=0, drop=True).
+                                     fillna(0))
 
         # Date-based features
+        first_commit = df.groupby("path")["date"].transform("min")
+        df["age_in_days"] = (df["date"] - first_commit).dt.days
+
+        df["commits_per_day_so_far"] = df["commit_num"] / (df["age_in_days"] + 1)
+
         df["weekday"] = df["date"].dt.weekday
         df["month"] = df["date"].dt.month
 

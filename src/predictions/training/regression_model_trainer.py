@@ -34,6 +34,26 @@ class RegressionModelTrainer:
         file_data_df, categorical_cols = data_tuple
         train_df, test_df = DataSplitter.split_by_file(file_data_df)
 
+        # Calculate and save dataset statistics
+        train_files = train_df['path'].nunique()
+        test_files = test_df['path'].nunique()
+        train_commits = len(train_df)
+        test_commits = len(test_df)
+        total_files = file_data_df['path'].nunique()
+
+        stats = {
+            'train_files': [train_files],
+            'test_files': [test_files],
+            'total_files': [total_files],
+            'train_commits': [train_commits],
+            'test_commits': [test_commits],
+        }
+
+        stats_df = pd.DataFrame(stats)
+        stats_csv_path = os.path.join(self.output_dir, "dataset_statistics.csv")
+        stats_df.to_csv(stats_csv_path, index=False)
+        self.logger.info(f"Dataset statistics saved to {stats_csv_path}")
+
         all_feature_cols = self.get_feature_cols(train_df)
         numerical_cols = [col for col in all_feature_cols if col not in categorical_cols]
 

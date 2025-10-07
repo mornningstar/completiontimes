@@ -97,7 +97,7 @@ class AblationStudy:
     def _get_columns_for_ablation(self, df: pd.DataFrame, include_groups: list[str], feature_type: str):
         essential_cols = {
             "path", "date", "completion_date", "completion_reason", "committer",
-            "days_until_completion", "start", "stop", "event", "duration"
+            "days_until_completion"
         }
         selected_cols = {col for col in df.columns if col in essential_cols}
 
@@ -113,11 +113,5 @@ class AblationStudy:
 
             else:
                 logging.warning(f"Feature group '{group_name}' not found in ALL_FEATURE_GENERATORS. Skipping.")
-
-        if feature_type == "regression":
-            regression_specific_cols = ["age_in_days", "commits_per_day_so_far", "growth_x_age"]
-            for col in regression_specific_cols:
-                if col in df.columns:
-                    selected_cols.add(col)
 
         return list(selected_cols)

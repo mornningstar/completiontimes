@@ -7,6 +7,8 @@ from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_val_score
 
+from config import globals
+
 from src.predictions.base_model import BaseModel
 
 
@@ -43,7 +45,7 @@ class RandomForestModel(BaseModel):
                 params['max_samples'] = None
 
             model = RandomForestRegressor(random_state=42, **params)
-            score = cross_val_score(model, x_train, y_train, groups=groups, cv=splitter, scoring=scoring, n_jobs=-1)
+            score = cross_val_score(model, x_train, y_train, groups=groups, cv=splitter, scoring=scoring, n_jobs=globals.CPU_LIMIT)
             return score.mean()
     
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')

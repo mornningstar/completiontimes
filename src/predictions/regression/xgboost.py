@@ -7,6 +7,8 @@ import xgboost
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.model_selection import cross_val_score
 
+from config import globals
+
 from src.predictions.base_model import BaseModel
 
 
@@ -39,7 +41,8 @@ class XGBoostModel(BaseModel):
                 'random_state': 42
             }
             model = xgboost.XGBRegressor(**params)
-            score = cross_val_score(model, x_train, y_train, groups=groups, cv=splitter, scoring=scoring, n_jobs=-1)
+            score = cross_val_score(model, x_train, y_train, groups=groups, cv=splitter, scoring=scoring,
+                                    n_jobs=globals.CPU_LIMIT)
             return score.mean()
 
         study = optuna.create_study(direction='maximize')

@@ -16,12 +16,6 @@ class RegressionFeatureEngineering(BaseFeatureEngineer):
 
     def engineer_features(self, file_df, window=7, include_sets = None):
         file_df, categorical_cols = super().engineer_features(file_df, window, include_sets)
-
-        first_commit = file_df.groupby("path")["date"].transform("min")
-        file_df["age_in_days"] = (file_df["date"] - first_commit).dt.days
-        file_df["commits_per_day_so_far"] = file_df["total_commits"] / (file_df["age_in_days"] + 1)
-        file_df["growth_x_age"] = file_df["recent_growth_ratio"] * file_df["age_in_days"]
-
         file_df = self.completion_labler.add_days_until_completion(file_df)
 
         numeric_cols = [col for col in file_df.select_dtypes(include=[np.number]).columns
