@@ -6,7 +6,7 @@ import numpy as np
 import optuna
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 
 from config import globals
 
@@ -22,15 +22,21 @@ class GradientBoosting(BaseModel):
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials = 100, timeout = None):
-        self.logger.info("GradientBoosting - Starting hyperparameter tuning...")
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials = 100,
+                  timeout = None, split_strategy='by_file'):
+        self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
-        unique_groups = np.unique(groups)
-        num_groups = len(unique_groups)
-
-        test_size = max(1, int(num_groups * 0.2))
-
-        splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+        if split_strategy == 'by_file':
+            unique_groups = np.unique(groups)
+            num_groups = len(unique_groups)
+            test_size = max(1, int(num_groups * 0.2))
+            splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+            cv_groups = groups
+        elif split_strategy == "by_history":
+            splitter = TimeSeriesSplit(n_splits=cv)
+            cv_groups = None
+        else:
+            raise ValueError(f"Unknown split_strategy: {split_strategy}")
 
         def objective(trial):
             param_grid = {
@@ -46,7 +52,7 @@ class GradientBoosting(BaseModel):
             }
 
             model = GradientBoostingRegressor(random_state=42, **param_grid)
-            scores = cross_val_score(model, x_train, y_train, groups=groups, cv=splitter,
+            scores = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter,
                                      scoring=scoring, n_jobs=globals.CPU_LIMIT)
             return scores.mean()
 
@@ -64,14 +70,14 @@ class GradientBoosting(BaseModel):
 
         return study.best_params
 
-    def train(self, x_train, y_train, groups = None):
+    def train(self, x_train, y_train, groups = None, split_strategy='by_file'):
         self.logger.info("Gradient Boosting: Training model..")
 
         if self.auto_tune_flag:
-            if groups is None:
+            if groups is None and split_strategy == 'by_file':
                 raise ValueError("Groups are required for auto_tuning.")
             self.logger.info("Tuning hyperparameters with Optuna...")
-            self.auto_tune(x_train, y_train, groups=groups)
+            self.auto_tune(x_train, y_train, groups=groups, split_strategy=split_strategy)
         else:
             self.model = GradientBoostingRegressor(random_state=42)
             self.model.fit(x_train, y_train)

@@ -18,6 +18,9 @@ class RegressionFeatureEngineering(BaseFeatureEngineer):
         file_df, categorical_cols = super().engineer_features(file_df, window, include_sets)
         file_df = self.completion_labler.add_days_until_completion(file_df)
 
+        if file_df.empty:
+            return file_df, categorical_cols
+
         numeric_cols = [col for col in file_df.select_dtypes(include=[np.number]).columns
                         if col != "days_until_completion"]
 

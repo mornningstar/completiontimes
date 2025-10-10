@@ -11,13 +11,14 @@ from src.visualisations.model_plotting import ModelPlotter
 
 
 class RegressionModelTrainer:
-    def __init__(self, project_name, model, images_dir, output_dir="models"):
+    def __init__(self, project_name, model_cls, data_split, images_dir, output_dir="models"):
         self.project_name = project_name
-        self.model = model(auto_tune=True)
+        self.model = model_cls(auto_tune=True)
+        self.split_strategy = data_split
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
-        self.model_plotter = ModelPlotter(project_name, model, images_dir=images_dir)
+        self.model_plotter = ModelPlotter(project_name, model_cls, images_dir=images_dir)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.evaluator = ModelEvaluator(self.model, self.model_plotter, self.output_dir, self.logger)
 
@@ -32,7 +33,13 @@ class RegressionModelTrainer:
 
     def train_and_evaluate(self, data_tuple):
         file_data_df, categorical_cols = data_tuple
-        train_df, test_df = DataSplitter.split_by_file(file_data_df)
+
+        if self.split_strategy == "by_file":
+            train_df, test_df = DataSplitter.split_by_file(file_data_df)
+        elif self.split_strategy == "by_history":
+            train_df, test_df = DataSplitter.split_by_history(file_data_df)
+        else:
+            raise ValueError(f"Unknown split_strategy: {self.split_strategy}")
 
         # Calculate and save dataset statistics
         train_files = train_df['path'].nunique()
@@ -84,7 +91,7 @@ class RegressionModelTrainer:
         y_test_log = np.log1p(test_df["days_until_completion"].values)
 
         groups = train_df["path"].values
-        self.model.train(x_train, y_train_log, groups=groups)
+        self.model.train(x_train, y_train_log, groups=groups, split_strategy=self.split_strategy)
 
         if self.model.model is not None:
             self.model_plotter.plot_learning_curves(self.model.model, x_train, y_train_log, groups=groups)
@@ -105,6 +112,7 @@ class RegressionModelTrainer:
         results_data = {
             "project": self.project_name,
             "model": self.model.__class__.__name__,
+            "split_strategy": self.split_strategy,
             "mse": round(metrics.mse, 4),
             "mae": round(metrics.mae, 4),
             "mae_std": round(metrics.mae_std, 4),

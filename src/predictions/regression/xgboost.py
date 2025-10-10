@@ -5,7 +5,7 @@ import numpy as np
 import optuna
 import xgboost
 from mlxtend.evaluate import GroupTimeSeriesSplit
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 
 from config import globals
 
@@ -17,13 +17,21 @@ class XGBoostModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=100, timeout=None):
-        self.logger.info("Starting XGBoost hyperparameter tuning...")
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=100, timeout=None,
+                  split_strategy='by_file'):
+        self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
-        unique_groups = np.unique(groups)
-        num_groups = len(unique_groups)
-        test_size = max(1, int(num_groups * 0.2))
-        splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+        if split_strategy == 'by_file':
+            unique_groups = np.unique(groups)
+            num_groups = len(unique_groups)
+            test_size = max(1, int(num_groups * 0.2))
+            splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+            cv_groups = groups
+        elif split_strategy == "by_history":
+            splitter = TimeSeriesSplit(n_splits=cv)
+            cv_groups = None
+        else:
+            raise ValueError(f"Unknown split_strategy: {split_strategy}")
 
         def objective(trial):
             params = {
@@ -41,7 +49,7 @@ class XGBoostModel(BaseModel):
                 'random_state': 42
             }
             model = xgboost.XGBRegressor(**params)
-            score = cross_val_score(model, x_train, y_train, groups=groups, cv=splitter, scoring=scoring,
+            score = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter, scoring=scoring,
                                     n_jobs=globals.CPU_LIMIT)
             return score.mean()
 
@@ -57,14 +65,14 @@ class XGBoostModel(BaseModel):
         self.logger.info("Best parameters:\n" + pprint.pformat(study.best_params))
         self.logger.info(f"Tuning finished in {elapsed_time:.2f} seconds")
 
-    def train(self, x_train, y_train, groups=None):
+    def train(self, x_train, y_train, groups=None, split_strategy='by_file'):
         self.logger.info("XGBoost: Training model..")
 
         if self.auto_tune_flag:
-            if groups is None:
+            if groups is None and split_strategy == 'by_file':
                 raise ValueError("Groups are required for auto_tuning with XGBoost.")
             self.logger.info("XGBoost: Tuning hyperparameters with Optuna...")
-            self.auto_tune(x_train, y_train, groups=groups)
+            self.auto_tune(x_train, y_train, groups=groups, split_strategy=split_strategy)
         else:
             self.model = xgboost.XGBRegressor(random_state=42)
             self.model.fit(x_train, y_train)

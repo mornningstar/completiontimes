@@ -77,61 +77,61 @@ projects:
 #        feature_type: regression
 #      - class: XGBoostModel
 #        feature_type: regression
-
-  - name: 'fastapi/fastapi'
-    source_directory: 'fastapi'
-    get_newest: True
-    ablation: True
-    models:
-      - class: LinearRegressionModel
-        feature_type: regression
-      - class: MedianBaseModel
-        feature_type: regression
-      - class: LightGBMModel
-        feature_type: regression
-      - class: RandomForestModel
-        feature_type: regression
-      - class: GradientBoosting
-        feature_type: regression
-      - class: XGBoostModel
-        feature_type: regression
-
-  - name: 'pallets/flask'
-    source_directory: 'src'
-    get_newest: True
-    ablation: True
-    models:
-      - class: LinearRegressionModel
-        feature_type: regression
-      - class: MedianBaseModel
-        feature_type: regression
-      - class: LightGBMModel
-        feature_type: regression
-      - class: RandomForestModel
-        feature_type: regression
-      - class: GradientBoosting
-        feature_type: regression
-      - class: XGBoostModel
-        feature_type: regression
-
-  - name: 'keras-team/keras'
-    source_directory: 'keras'
-    get_newest: True
-    ablation: True
-    models:
-      - class: LinearRegressionModel
-        feature_type: regression
-      - class: MedianBaseModel
-        feature_type: regression
-      - class: LightGBMModel
-        feature_type: regression
-      - class: RandomForestModel
-        feature_type: regression
-      - class: GradientBoosting
-        feature_type: regression
-      - class: XGBoostModel
-        feature_type: regression
-
+#
+#  - name: 'fastapi/fastapi'
+#    source_directory: 'fastapi'
+#    get_newest: True
+#    ablation: True
+#    models:
+#      - class: LinearRegressionModel
+#        feature_type: regression
+#      - class: MedianBaseModel
+#        feature_type: regression
+#      - class: LightGBMModel
+#        feature_type: regression
+#      - class: RandomForestModel
+#        feature_type: regression
+#      - class: GradientBoosting
+#        feature_type: regression
+#      - class: XGBoostModel
+#        feature_type: regression
+#
+#  - name: 'pallets/flask'
+#    source_directory: 'src'
+#    get_newest: True
+#    ablation: True
+#    models:
+#      - class: LinearRegressionModel
+#        feature_type: regression
+#      - class: MedianBaseModel
+#        feature_type: regression
+#      - class: LightGBMModel
+#        feature_type: regression
+#      - class: RandomForestModel
+#        feature_type: regression
+#      - class: GradientBoosting
+#        feature_type: regression
+#      - class: XGBoostModel
+#        feature_type: regression
+#
+#  - name: 'keras-team/keras'
+#    source_directory: 'keras'
+#    get_newest: True
+#    ablation: True
+#    models:
+#      - class: LinearRegressionModel
+#        feature_type: regression
+#      - class: MedianBaseModel
+#        feature_type: regression
+#      - class: LightGBMModel
+#        feature_type: regression
+#      - class: RandomForestModel
+#        feature_type: regression
+#      - class: GradientBoosting
+#        feature_type: regression
+#      - class: XGBoostModel
+#        feature_type: regression
+#
 #  - name: 'tabler/tabler'
 #    source_directory: 'src'
 #    get_newest: True
@@ -167,21 +167,27 @@ projects:
 #        feature_type: regression
 #      - class: XGBoostModel
 #        feature_type: regression
-#
-#  - name: 'google/gson'
-#    source_directory: 'src'
-#    get_newest: True
-#    ablation: True
-#    models:
-#      - class: LinearRegressionModel
-#        feature_type: regression
-#      - class: MedianBaseModel
-#        feature_type: regression
-#      - class: LightGBMModel
-#        feature_type: regression
-#      - class: RandomForestModel
-#        feature_type: regression
-#      - class: GradientBoosting
-#        feature_type: regression
-#      - class: XGBoostModel
-#        feature_type: regression
+
+  - name: 'google/gson'
+    source_directory: 'gson/src'
+    get_newest: False
+    ablation: True
+    models:
+      - class: LinearRegressionModel
+        feature_type: regression
+        split_strategy: by_file
+      - class: MedianBaseModel
+        feature_type: regression
+        split_strategy: by_file
+      - class: LightGBMModel
+        feature_type: regression
+        split_strategy: by_file
+      - class: RandomForestModel
+        feature_type: regression
+        split_strategy: by_file
+      - class: GradientBoosting
+        feature_type: regression
+        split_strategy: by_file
+      - class: XGBoostModel
+        feature_type: regression
+        split_strategy: by_file

@@ -16,7 +16,7 @@ class BaseModel:
     def inverse_scale(self, data):
         return self.scaler.inverse_transform(data)
 
-    def train(self, x_train, y_train):
+    def train(self, x_train, y_train, **kwargs):
         raise NotImplementedError("Train method must be implemented.")
 
     def evaluate(self, x_test, y_test):

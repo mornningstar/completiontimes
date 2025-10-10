@@ -68,7 +68,7 @@ class BaseFeatureEngineer:
     def engineer_features(self, df, window: int = 7, include_sets = None):
         df = df.groupby("path").filter(lambda g: len(g) >= 5)
         if df.empty:
-            return df
+            return df, []
 
         if include_sets is None:
             include_sets = feature_generator_registry.get_all_names()

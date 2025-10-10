@@ -8,8 +8,15 @@ from lightgbm import LGBMRegressor
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from optuna.samplers import TPESampler
 from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import TimeSeriesSplit
 
 from src.predictions.base_model import BaseModel
+
+try:
+    import cupy as cp
+    GPU_AVAILABLE = cp.cuda.is_available()
+except (ImportError, RuntimeError):
+    GPU_AVAILABLE = False
 
 
 class LightGBMModel(BaseModel):
@@ -18,14 +25,18 @@ class LightGBMModel(BaseModel):
         self.model = None
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5):
-        self.logger.info("Starting LightGBM hyperparameter tuning...")
+    def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5, split_strategy='by_file'):
+        self.logger.info(f"Starting LightGBM hyperparameter tuning with '{split_strategy}' strategy...")
 
-        unique_groups = np.unique(groups)
-        num_groups = len(unique_groups)
-        test_size = max(1, int(num_groups * 0.2))
-
-        splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+        if split_strategy == 'by_file':
+            unique_groups = np.unique(groups)
+            num_groups = len(unique_groups)
+            test_size = max(1, int(num_groups * 0.2))
+            splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+        elif split_strategy == 'by_history':
+            splitter = TimeSeriesSplit(n_splits=cv)
+        else:
+            raise ValueError(f"Unknown split_strategy: {split_strategy}")
 
         def objective(trial):
             trial_params = {
@@ -45,9 +56,17 @@ class LightGBMModel(BaseModel):
                 'random_state': 42
             }
 
+            if GPU_AVAILABLE:
+                trial_params['device_type'] = 'gpu'
+                self.logger.info("GPU detected. Using 'gpu' for LightGBM.")
+            else:
+                trial_params['device_type'] = 'cpu'
+                self.logger.info("No GPU detected. Using 'cpu' for LightGBM.")
+
             maes = []
 
-            for train_idx, valid_idx in splitter.split(x_train, y_train, groups=groups):
+            split_args = (x_train, y_train, groups) if split_strategy == 'by_file' else (x_train, y_train)
+            for train_idx, valid_idx in splitter.split(*split_args):
                 X_train, X_val = x_train.iloc[train_idx], x_train.iloc[valid_idx]
                 Y_train, Y_val = y_train[train_idx], y_train[valid_idx]
                 m = LGBMRegressor(**trial_params, verbose=-1)
@@ -73,11 +92,11 @@ class LightGBMModel(BaseModel):
 
         return study.best_params
 
-    def train(self, x_train, y_train, groups = None):
+    def train(self, x_train, y_train, groups = None, split_strategy='by_file'):
         self.logger.info("LightGBM: Training model..")
         if self.auto_tune_flag:
             self.logger.info("Tuning hyperparameters with Optuna...")
-            self.auto_tune(x_train, y_train, groups)
+            self.auto_tune(x_train, y_train, groups, split_strategy=split_strategy)
 
         self.model.fit(x_train, y_train)
 

@@ -16,9 +16,10 @@ class ModelTrainingPipeline:
             features_to_use = await self.feature_pipeline.get_or_create_features(model_cfg)
 
             model_cls = model_cfg["class"]
+            data_split = model_cfg.get("split_strategy", "by_file")
             feature_type = model_cfg.get("feature_type", "regression")
             trainer_cls = TRAINER_BY_TYPE[feature_type]
 
-            trainer = trainer_cls(self.project_name, model_cls, images_dir=self.images_dir, output_dir=self.models_dir)
+            trainer = trainer_cls(self.project_name, model_cls, data_split, images_dir=self.images_dir, output_dir=self.models_dir)
             trainer.train_and_evaluate(features_to_use)
             trainer.predict_unlabeled_files(features_to_use, latest_only=True)

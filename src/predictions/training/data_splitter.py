@@ -20,3 +20,28 @@ class DataSplitter:
         test_df = file_data_df[file_data_df["path"].isin(test_paths)].dropna(subset=["days_until_completion"])
 
         return train_df, test_df
+
+    @staticmethod
+    def split_by_history(file_data_df: pd.DataFrame, test_ratio: float = 0.2):
+        train_parts = []
+        test_parts = []
+
+        for path, group in file_data_df.groupby("path"):
+            group = group.sort_values("date")
+            if len(group) < 5:
+                continue
+
+            split_idx = int(len(group) * (1 - test_ratio))
+            if split_idx == len(group):
+                split_idx = len(group) - 1
+
+            train_parts.append(group.iloc[:split_idx])
+            test_parts.append(group.iloc[split_idx:])
+
+        if not train_parts or not test_parts:
+            return pd.DataFrame(), pd.DataFrame()
+
+        train_df = pd.concat(train_parts)
+        test_df = pd.concat(test_parts)
+
+        return train_df, test_df

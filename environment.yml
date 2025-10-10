@@ -90,6 +90,7 @@ dependencies:
   - cuda-profiler-api=12.8.90=h7938cbb_1
   - cuda-python=12.8.0=pyh624ad82_1
   - cuda-version=12.8=h5d125a7_3
+  - lightgbm-gpu
   - cudf-polars=25.02.02=cuda12_py311_250303_g8139f3c84f_0
   - cudf_kafka=25.02.02=cuda12_py311_250303_g8139f3c84f_0
   - cuvs=25.02.01=cuda12_py311_250303_g20b6775_0
