@@ -43,7 +43,7 @@ class Plotter:
 
     def save_plot(self, filename):
         """Helper function to save the current plot to the project directory."""
-        plt.savefig(os.path.join(self.images_dir, filename))
+        plt.savefig(os.path.join(self.images_dir, filename), dpi=300, bbox_inches='tight')
         plt.close()
 
     def plot_violin(self, data, x, y, title, xlabel, ylabel, filename=None):

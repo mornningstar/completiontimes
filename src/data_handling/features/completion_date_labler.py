@@ -23,7 +23,7 @@ class CompletionDateLabler:
 
         return df
 
-    def label(self, df: pd.DataFrame, **kwargs) -> tuple[pd.DataFrame, int, int]:
+    def label(self, df: pd.DataFrame, **kwargs) -> tuple[pd.DataFrame, int, int, pd.Series]:
         """
         Add a 'completion_date' column for each file based on two strategies:
         1. A stable pattern: percentage_change stays below threshold for consecutive_days commits
@@ -80,7 +80,7 @@ class CompletionDateLabler:
         for reason, count in strategy_counts.items():
             self.logging.info(f"{reason}: {count} files")
 
-        return df, num_completed_files, total_files
+        return df, num_completed_files, total_files, strategy_counts
 
 
     def _check_stable_line_change_window(self, group):

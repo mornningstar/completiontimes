@@ -14,12 +14,8 @@ from src.visualisations.plotting import Plotter
 
 
 class ModelPlotter(Plotter):
-    def __init__(self, project_name, model=None, images_dir='images'):
-        if model:
-            super().__init__(project_name, f"{images_dir}/{model.__name__}")
-        else:
-            super().__init__(project_name, images_dir)
-
+    def __init__(self, project_name, images_dir='images'):
+        super().__init__(project_name, images_dir)
         self.logging = logging.getLogger(self.__class__.__name__)
 
     def plot_residuals(self, y_true, y_pred):
@@ -41,6 +37,14 @@ class ModelPlotter(Plotter):
         plt.tight_layout()
 
         self.save_plot(f"residuals.png")
+
+    def plot_mae_by_age(self, age_error_df):
+        self._init_plot(title="Model Performance vs. File Age",
+                        xlabel="File Age at Time of Prediction (Days)",
+                        ylabel="Mean Absolute Error (MAE)")
+
+        plt.bar(age_error_df.index.astype(str), age_error_df['mae'], yerr=age_error_df['mae_std'], capsize=5)
+        self.save_plot("mae_vs_file_age.png")
 
     def plot_errors_vs_actual(self, y_true, y_pred):
         errors = y_true - y_pred
@@ -79,21 +83,26 @@ class ModelPlotter(Plotter):
         plt.tight_layout()
         self.save_plot("predicted_vs_actual.png")
 
-    def plot_top_errors(self, y_true, y_pred, n=10):
-        errors = abs(y_true - y_pred)
-        top_indices = errors.argsort()[-n:][::-1]
+    def plot_top_errors(self, errors_df, n=10):
+        top_errors = errors_df.sort_values("abs_error", ascending=False).head(n)
+        top_errors = top_errors.sort_values("abs_error", ascending=True)
 
-        df = pd.DataFrame({
-            'Actual': y_true[top_indices],
-            'Predicted': y_pred[top_indices],
-            'Error': errors[top_indices]
-        })
+        self._init_plot(title=f"Top {n} Prediction Errors",
+                        xlabel="Days Until Completion",
+                        ylabel="Individual Predictions")
 
-        df = df.sort_values('Error', ascending=True)
+        y_range = range(len(top_errors))
 
-        self._init_plot(title=f"Top {n} Prediction Errors", xlabel="Days Until Completion")
+        plt.hlines(y=y_range, xmin=top_errors['actual'], xmax=top_errors['pred'],
+                   color='grey', alpha=0.4)
 
-        df[['Actual', 'Predicted']].plot(kind='barh')
+        plt.scatter(top_errors['actual'], y_range, color='skyblue', s=100, label='Actual')
+        plt.scatter(top_errors['pred'], y_range, color='red', s=100, label='Predicted')
+
+        labels = [f"Error: {err:.0f}" for err in top_errors['abs_error']]
+        plt.yticks(y_range, labels)
+
+        plt.legend()
         plt.tight_layout()
 
         self.save_plot("top_prediction_errors.png")

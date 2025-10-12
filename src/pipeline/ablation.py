@@ -69,13 +69,13 @@ class AblationStudy:
 
                 trainer_cls = TRAINER_BY_TYPE[feature_type]
 
-                ablation_images_dir = os.path.join(self.images_dir, model_name, ablation["name"])
-                ablation_models_dir = os.path.join(self.models_dir, model_name, ablation["name"])
+                ablation_images_dir = os.path.join(self.images_dir, model_name, data_split, ablation["name"])
+                ablation_models_dir = os.path.join(self.models_dir, model_name, data_split, ablation["name"])
+
                 os.makedirs(ablation_images_dir, exist_ok=True)
                 os.makedirs(ablation_models_dir, exist_ok=True)
 
-                trainer = trainer_cls(self.project_name, model_cfg["class"], data_split, ablation_images_dir,
-                                      ablation_models_dir)
+                trainer = trainer_cls(self.project_name, model_cfg, ablation_images_dir, ablation_models_dir)
 
                 # 3. Train the model on the subset of features
                 training_result = trainer.train_and_evaluate((ablation_df, ablation_categorical_cols))
@@ -83,6 +83,7 @@ class AblationStudy:
                 result_data = {
                     "project": self.project_name,
                     "model": model_name,
+                    "split_Strategy": data_split,
                     "configuration": ablation["name"],
                     "timestamp": self.timestamp,
                 }

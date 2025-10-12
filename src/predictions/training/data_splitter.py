@@ -26,7 +26,9 @@ class DataSplitter:
         train_parts = []
         test_parts = []
 
-        for path, group in file_data_df.groupby("path"):
+        valid_df = file_data_df.dropna(subset=["days_until_completion"]).copy()
+
+        for path, group in valid_df.groupby("path"):
             group = group.sort_values("date")
             if len(group) < 5:
                 continue

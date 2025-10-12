@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pandas as pd
 
@@ -87,7 +88,27 @@ class BaseFeatureEngineer:
                 self.logging.warning(f"Feature group '{group_name}' not found in registry.")
 
         # Apply the completion date labels
-        df, num_completed_files, total_files = self.completion_labler.label(df)
+        df, num_completed_files, total_files, strategy_counts = self.completion_labler.label(df)
+
+        summary_data = {
+            "Total Files": total_files,
+            "Completed Files": num_completed_files,
+            "Completion Ratio (%)": (num_completed_files / total_files * 100) if total_files > 0 else 0,
+        }
+
+        summary_df = pd.DataFrame([summary_data])
+        strategy_df = strategy_counts.reset_index()
+        strategy_df.columns = ['Reason', 'Count']
+
+        output_path = os.path.join(self.plotter.images_dir, "completion_summary.csv")
+        with open(output_path, 'w') as f:
+            f.write("Completion Summary\n")
+            summary_df.to_csv(f, index=False)
+            f.write("\nCompletion Reasons\n")
+            strategy_df.to_csv(f, index=False)
+
+        self.logging.info(f"Completion summary statistics saved to {output_path}.")
+
         if total_files > 0:
             self.plotter.plot_completion_donut(num_completed_files, total_files)
 

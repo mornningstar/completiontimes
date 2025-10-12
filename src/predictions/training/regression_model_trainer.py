@@ -11,14 +11,15 @@ from src.visualisations.model_plotting import ModelPlotter
 
 
 class RegressionModelTrainer:
-    def __init__(self, project_name, model_cls, data_split, images_dir, output_dir="models"):
+    def __init__(self, project_name, model_cfg, images_dir, output_dir="models"):
         self.project_name = project_name
+        model_cls = model_cfg["class"]
         self.model = model_cls(auto_tune=True)
-        self.split_strategy = data_split
+        self.split_strategy = model_cfg.get("split_strategy", "by_file")
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
-        self.model_plotter = ModelPlotter(project_name, model_cls, images_dir=images_dir)
+        self.model_plotter = ModelPlotter(project_name, images_dir=images_dir)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.evaluator = ModelEvaluator(self.model, self.model_plotter, self.output_dir, self.logger)
 
@@ -87,6 +88,16 @@ class RegressionModelTrainer:
         x_test = x_test[x_train.columns]
         final_feature_cols = x_train.columns.tolist()
 
+        if not train_df.empty and "days_until_completion" in train_df.columns:
+            adaptive_cap = np.percentile(train_df["days_until_completion"].dropna(), 99)
+            adaptive_cap = max(adaptive_cap, 365)
+        else:
+            adaptive_cap = 2000
+
+        self.logger.info(
+            f"Using an adaptive prediction cap of {adaptive_cap:.0f} days (based on 99th percentile of training data)."
+        )
+
         y_train_log = np.log1p(train_df["days_until_completion"].values)
         y_test_log = np.log1p(test_df["days_until_completion"].values)
 
@@ -101,9 +112,13 @@ class RegressionModelTrainer:
                 self.model_plotter.plot_model_feature_importance(final_feature_cols, importances)
 
         #Evaluation
-        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, final_feature_cols)
+        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df,
+                                                                        final_feature_cols, max_days=adaptive_cap)
         error_path = self.evaluator.perform_error_analysis(errors_df, final_feature_cols, self.model,
                                                            self.model_plotter, self.output_dir, self.logger)
+
+        self.logger.info(f"Performing analysis of performance vs. file age for '{self.split_strategy}' split...")
+        self.evaluator.analyze_performance_by_age(errors_df)
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)

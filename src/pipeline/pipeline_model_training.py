@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 from src.pipeline.configs import TRAINER_BY_TYPE
@@ -15,11 +16,19 @@ class ModelTrainingPipeline:
         for model_cfg in self.models:
             features_to_use = await self.feature_pipeline.get_or_create_features(model_cfg)
 
-            model_cls = model_cfg["class"]
+            model_name = model_cfg["class"].__name__
             data_split = model_cfg.get("split_strategy", "by_file")
             feature_type = model_cfg.get("feature_type", "regression")
             trainer_cls = TRAINER_BY_TYPE[feature_type]
 
-            trainer = trainer_cls(self.project_name, model_cls, data_split, images_dir=self.images_dir, output_dir=self.models_dir)
+            model_specific_images_dir = os.path.join(self.images_dir, model_name, data_split)
+            model_specific_model_dir = os.path.join(self.models_dir, model_name, data_split)
+
+            trainer = trainer_cls(
+                self.project_name,
+                model_cfg,
+                images_dir=model_specific_images_dir,
+                output_dir=model_specific_model_dir
+            )
             trainer.train_and_evaluate(features_to_use)
             trainer.predict_unlabeled_files(features_to_use, latest_only=True)

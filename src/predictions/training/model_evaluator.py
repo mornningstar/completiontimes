@@ -15,13 +15,14 @@ class ModelEvaluator:
         self.output_dir = output_dir
         self.logger = logger
 
-    def evaluate(self, x_test, y_test, test_df, feature_cols):
+    def evaluate(self, x_test, y_test, test_df, feature_cols, max_days):
         y_pred_log = self.model.evaluate(x_test, y_test)
 
-        max_days = 1_000
         max_safe_log = np.log1p(max_days)
         y_pred_log = np.clip(y_pred_log, a_min=None, a_max=max_safe_log)
+
         y_pred = np.maximum(np.expm1(y_pred_log), 0)
+        
         y_test = np.expm1(y_test)
 
         result_df = test_df[["path", "date"]].copy()
@@ -50,11 +51,28 @@ class ModelEvaluator:
         self.model_plotter.plot_residuals(y_test, y_pred)
         self.model_plotter.plot_errors_vs_actual(y_test, y_pred)
         self.model_plotter.plot_predictions_vs_actual(y_test, y_pred)
-        self.model_plotter.plot_top_errors(y_test, y_pred, n=10)
+        self.model_plotter.plot_top_errors(errors_df, n=10)
 
         eval_path = EvaluationPath(evaluation_path=eval_csv_path)
         return y_pred, errors_df, metrics, eval_path
 
+    def analyze_performance_by_age(self, errors_df):
+        if 'age_in_days' not in errors_df.columns:
+            self.logger.warning("Skipping performance vs. age analysis: 'age_in_days' column not found.")
+            return
+
+        age_bins = [0, 30, 90, 180, 365, np.inf]
+        age_labels = ["0-30", "31-90", "91-180", "181-365", "365+"]
+
+        errors_df['age_bin'] = pd.cut(errors_df['age_in_days'], bins=age_bins, labels=age_labels, right=False)
+
+        age_analysis = errors_df.groupby('age_bin')['abs_error'].agg(['mean', 'std']).rename(
+            columns={'mean': 'mae', 'std': 'mae_std'}
+        )
+
+        self.logger.info("MAE by File Age:\n{}".format(age_analysis))
+
+        self.model_plotter.plot_mae_by_age(age_analysis)
 
     @staticmethod
     def perform_error_analysis(errors_df, feature_cols, model, model_plotter, output_dir, logger,
@@ -74,6 +92,10 @@ class ModelEvaluator:
         explain.analyze_top_errors(errors_df)
         explain.analyze_error_sources(errors_df)
         explain.analyze_shap_by_committer(errors_df)
+
+        sample_for_pdp = errors_df.sample(n=min(500, len(errors_df)), random_state=42)
+        x_sample = sample_for_pdp[feature_cols]
+        explain.analyze_pdp_ice(x_sample)
 
         error_csv = os.path.join(output_dir, "error_analysis.csv")
         errors_df.to_csv(error_csv, index=False)

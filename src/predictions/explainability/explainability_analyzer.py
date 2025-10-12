@@ -1,5 +1,6 @@
 import logging
 
+import numpy as np
 from shap import TreeExplainer, LinearExplainer
 from shap.utils._exceptions import InvalidModelError
 from sklearn.inspection import PartialDependenceDisplay

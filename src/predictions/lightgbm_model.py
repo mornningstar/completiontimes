@@ -7,7 +7,7 @@ import optuna
 from lightgbm import LGBMRegressor
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from optuna.samplers import TPESampler
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
 
 from src.predictions.base_model import BaseModel
@@ -63,7 +63,7 @@ class LightGBMModel(BaseModel):
                 trial_params['device_type'] = 'cpu'
                 self.logger.info("No GPU detected. Using 'cpu' for LightGBM.")
 
-            maes = []
+            mses = []
 
             split_args = (x_train, y_train, groups) if split_strategy == 'by_file' else (x_train, y_train)
             for train_idx, valid_idx in splitter.split(*split_args):
@@ -75,8 +75,8 @@ class LightGBMModel(BaseModel):
                       eval_metric="mse",
                       callbacks=[lightgbm.early_stopping(stopping_rounds=75)])
                 preds = m.predict(X_val)
-                maes.append(mean_absolute_error(Y_val, preds))
-            return np.mean(maes)
+                mses.append(mean_squared_error(Y_val, preds))
+            return np.mean(mses)
 
         study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42))
         start_time = time.time()
