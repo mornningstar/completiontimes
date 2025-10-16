@@ -13,7 +13,7 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
 
     def get_feature_names(self, df: pd.DataFrame) -> list[str]:
         return [
-            'commit_num', 'commit_interval_days', 'is_first_commit',
+            'commit_num', 'commit_interval_days', 'is_first_commit', 'age_in_days', 'commits_per_day_so_far',
             'std_commit_interval', 'avg_commit_interval', 'weekday', 'month'
         ] + [f'commits_last_{w}d' for w in self.windows] + [f'commits_ratio_{w}d' for w in self.windows]
 

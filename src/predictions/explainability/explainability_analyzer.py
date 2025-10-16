@@ -1,6 +1,7 @@
 import logging
 
 import numpy as np
+from matplotlib import pyplot as plt
 from shap import TreeExplainer, LinearExplainer
 from shap.utils._exceptions import InvalidModelError
 from sklearn.inspection import PartialDependenceDisplay
@@ -121,18 +122,25 @@ class ExplainabilityAnalyzer:
 
         importances = self.model.model.feature_importances_
         top_feature_indices = np.argsort(importances)[-top_n_features:]
-        top_feature_names = [self.feature_names[i] for i in top_feature_indices]
 
-        self.logging.info(f"Generating PDP/ICE plots for top features: {top_feature_names}")
+        self.logging.info(f"Generating PDP/ICE plots for top {top_n_features} features...")
 
-        PartialDependenceDisplay.from_estimator(
-            self.model.model,
-            X,
-            features=top_feature_indices,
-            feature_names=self.feature_names,
-            kind="both",  # Plot both PDP and ICE
-            ice_lines_kw={"color": "blue", "alpha": 0.3, "linewidth": 0.5},
-            pd_line_kw={"color": "red", "linestyle": "--", "linewidth": 2},
-        )
+        for feature_idx in top_feature_indices:
+            feature_name = self.feature_names[feature_idx]
 
-        self.model_plotter.save_plot("pdp_ice_top_features.png")
+            fig, ax = plt.subplots(figsize=(8,6))
+
+            PartialDependenceDisplay.from_estimator(
+                self.model.model,
+                X,
+                features=[feature_idx],
+                feature_names=self.feature_names,
+                kind="both",
+                subsample=50,
+                ice_lines_kw={"color": "blue", "alpha": 0.2, "linewidth": 0.5},
+                pd_line_kw={"color": "red", "linestyle": "--", "linewidth": 2},
+                ax=ax
+            )
+
+            filename = f"pdp_ice_{feature_name}.png"
+            self.model_plotter.save_plot(filename)

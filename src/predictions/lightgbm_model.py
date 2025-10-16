@@ -56,13 +56,6 @@ class LightGBMModel(BaseModel):
                 'random_state': 42
             }
 
-            if GPU_AVAILABLE:
-                trial_params['device_type'] = 'gpu'
-                self.logger.info("GPU detected. Using 'gpu' for LightGBM.")
-            else:
-                trial_params['device_type'] = 'cpu'
-                self.logger.info("No GPU detected. Using 'cpu' for LightGBM.")
-
             mses = []
 
             split_args = (x_train, y_train, groups) if split_strategy == 'by_file' else (x_train, y_train)
