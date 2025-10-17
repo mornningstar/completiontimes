@@ -1,6 +1,7 @@
 import logging
 
 import numpy as np
+import shap
 from matplotlib import pyplot as plt
 from shap import TreeExplainer, LinearExplainer
 from shap.utils._exceptions import InvalidModelError
@@ -26,12 +27,12 @@ class ExplainabilityAnalyzer:
         except InvalidModelError:
             pass  # Try LinearExplainer next
 
-        try:
-            # For linear models — use small background dataset if possible
-            return LinearExplainer(self.model.model, X_background or "auto")
-        except Exception as e:
-            self.logging.warning(f"Explainability skipped: {e}")
-            return None
+            try:
+                # For linear models
+                return LinearExplainer(self.model.model, X_background if X_background is not None else "auto")
+            except Exception as e:
+                self.logging.warning(f"Could not initialize SHAP explainer: {e}")
+                return None
     
     def analyze_worst_predictions(self, errors_df, top_n=3):
         worst_preds = errors_df.sort_values("abs_error", ascending=False).head(top_n)
@@ -61,6 +62,7 @@ class ExplainabilityAnalyzer:
 
         explainer = self._get_shap_explainer(X_background=X_best)
         if explainer is None:
+            self.logging.warning("Skipping interaction analysis: Could not get SHAP explainer.")
             return
 
         shap_values = explainer.shap_values(X_best)
@@ -76,6 +78,71 @@ class ExplainabilityAnalyzer:
                 title=title,
                 filename=filename
             )
+
+    def analyze_feature_interactions(self, X, top_n_features=3):
+        self.logging.info("Analyzing SHAP feature interactions...")
+
+        explainer = self._get_shap_explainer(X_background=X)
+        if explainer is None:
+            self.logging.warning("Skipping interaction analysis: Could not get SHAP explainer.")
+            return
+
+        shap_values_full = explainer.shap_values(X)
+
+        mean_abs_shap = np.abs(shap_values_full).mean(axis=0)
+        top_feature_indices = np.argsort(mean_abs_shap)[-top_n_features:]
+
+        try:
+            shap_interaction_values = explainer.shap_interaction_values(X)
+        except Exception as e:
+            self.logging.warning(f"Could not compute SHAP interaction values: {e}")
+            return
+
+        main_feature_idx = top_feature_indices[-1]
+        main_feature_name = self.feature_names[main_feature_idx]
+
+        for i in range(top_n_features - 1):
+            interaction_feature_idx = top_feature_indices[i]
+            interaction_feature_name = self.feature_names[interaction_feature_idx]
+
+            plt.figure()  # Ensure a new figure is created
+            shap.dependence_plot(
+                (main_feature_name, interaction_feature_name),
+                shap_interaction_values, X,
+                display_features=X,
+                show=False
+            )
+
+            plt.tight_layout()
+            filename = f"shap_interaction_{main_feature_name}_vs_{interaction_feature_name}.png"
+            self.model_plotter.save_plot(filename)
+
+
+        self.logging.info("Plotting specific hard-coded feature interactions...")
+        hard_coded_pairs = [
+            ('age_in_days', 'lag_1_size'),
+            ('commit_interval_days', 'age_in_days')
+        ]
+
+        for feat1, feat2 in hard_coded_pairs:
+            if feat1 in X.columns and feat2 in X.columns:
+                try:
+                    plt.figure()
+                    shap.dependence_plot(
+                        (feat1, feat2),
+                        shap_interaction_values, X,
+                        # display_features=X_df,
+                        show=False
+                    )
+                    plt.tight_layout()
+                    filename = f"shap_interaction_manual_{feat1}_vs_{feat2}.png"
+                    self.model_plotter.save_plot(filename)
+                except Exception as e:
+                    self.logging.warning(f"Failed to plot manual interaction for {feat1} vs {feat2}: {e}")
+
+            else:
+                self.logging.warning(
+                    f"Skipping interaction plot for {feat1} vs {feat2}: One or both features not found in data.")
 
 
     def analyze_shap_by_committer(self, errors_df, top_n_committers=5):

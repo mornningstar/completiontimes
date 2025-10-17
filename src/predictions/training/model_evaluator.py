@@ -96,6 +96,9 @@ class ModelEvaluator:
 
         sample_for_pdp = errors_df.sample(n=min(500, len(errors_df)), random_state=42)
         x_sample = sample_for_pdp[feature_cols]
+
+        explain.analyze_feature_interactions(x_sample)
+
         explain.analyze_pdp_ice(x_sample)
 
         error_csv = os.path.join(output_dir, "error_analysis.csv")
