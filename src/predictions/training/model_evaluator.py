@@ -89,7 +89,8 @@ class ModelEvaluator:
         model_plotter.plot_error_types_pie(errors_df["error_type"])
 
         explain = ExplainabilityAnalyzer(model=model, feature_names=feature_cols, model_plotter=model_plotter)
-        explain.analyze_top_errors(errors_df)
+        explain.analyze_worst_predictions(errors_df, top_n=3)
+        explain.analyze_best_predictions(errors_df, top_n=3)
         explain.analyze_error_sources(errors_df)
         explain.analyze_shap_by_committer(errors_df)
 

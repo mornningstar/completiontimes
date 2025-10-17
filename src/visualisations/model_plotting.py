@@ -152,12 +152,12 @@ class ModelPlotter(Plotter):
             plt.title(title)
         self.save_plot(filename)
 
-    def plot_shap_bar(self, shap_values_row, feature_names, title: str = None):
+    def plot_shap_bar(self, shap_values_row, feature_names, title: str = None, filename: str = "top_shap_bar.png"):
         self._init_plot()
         shap.bar_plot(shap_values_row, feature_names=feature_names, show=False)
         if title:
             plt.title(title)
-        self.save_plot("top_shap_bar.png")
+        self.save_plot(filename)
 
     def plot_risk_histogram(self, df, risk_col):
         self._init_plot(title="Distribution of Predicted Risks", xlabel="Predicted risk (lower = longer survival)", 

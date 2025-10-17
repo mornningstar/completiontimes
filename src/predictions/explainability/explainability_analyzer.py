@@ -32,19 +32,51 @@ class ExplainabilityAnalyzer:
         except Exception as e:
             self.logging.warning(f"Explainability skipped: {e}")
             return None
+    
+    def analyze_worst_predictions(self, errors_df, top_n=3):
+        worst_preds = errors_df.sort_values("abs_error", ascending=False).head(top_n)
+        X_worst = worst_preds[self.feature_names]
 
-    def analyze_top_errors(self, errors_df, top_n=10):
-        top_errors = errors_df.sort_values("abs_error", ascending=False).head(top_n)
-        X_top = top_errors[self.feature_names].values
+        explainer = self._get_shap_explainer(X_background=X_worst)
+        if not explainer:
+            return
 
-        explainer = self._get_shap_explainer(X_background=X_top)
+        shap_values = explainer.shap_values(X_worst)
+
+        for i in range(top_n):
+            residual_error = worst_preds.iloc[i]['residual']
+            title = f"SHAP for Worst Prediction #{i + 1} (Error: {residual_error:.2f} days)"
+            filename = f"worst_prediction_{i + 1}_shap_bar.png"
+
+            self.model_plotter.plot_shap_bar(
+                shap_values[i],
+                feature_names=self.feature_names,
+                title=title,
+                filename=filename
+            )
+
+    def analyze_best_predictions(self, errors_df, top_n=3):
+        best_preds = errors_df.sort_values("abs_error", ascending=True).head(top_n)
+        X_best = best_preds[self.feature_names]
+
+        explainer = self._get_shap_explainer(X_background=X_best)
         if explainer is None:
             return
 
-        shap_values = explainer.shap_values(X_top)
+        shap_values = explainer.shap_values(X_best)
 
-        self.model_plotter.plot_shap_summary(shap_values, X_top, self.feature_names)
-        self.model_plotter.plot_shap_bar(shap_values[0], self.feature_names)
+        for i in range(top_n):
+            residual_error = best_preds.iloc[i]['residual']
+            title = f"SHAP for Best Prediction #{i + 1} (Error: {residual_error:.2f} days)"
+            filename = f"best_prediction_{i + 1}_shap_bar.png"
+
+            self.model_plotter.plot_shap_bar(
+                shap_values[i],
+                feature_names=self.feature_names,
+                title=title,
+                filename=filename
+            )
+
 
     def analyze_shap_by_committer(self, errors_df, top_n_committers=5):
         if "committer_grouped" not in errors_df.columns:
@@ -53,7 +85,7 @@ class ExplainabilityAnalyzer:
 
         explainer = self._get_shap_explainer()
         if explainer is None:
-            return
+            return  
         
         top_committers = errors_df["committer_grouped"].value_counts().head(top_n_committers).index
 
