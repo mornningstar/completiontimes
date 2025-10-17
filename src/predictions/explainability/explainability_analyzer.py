@@ -167,7 +167,7 @@ class ExplainabilityAnalyzer:
             title_suffix = f"Committer: {committer}"
             self.model_plotter.plot_shap_summary(shap_values, X, self.feature_names, title=title_suffix,
                                                  filename=f"top_errors_shap_summary_{committer}.png")
-            self.model_plotter.plot_shap_bar(shap_values[0], self.feature_names, title=title_suffix + " (bar)")
+            #self.model_plotter.plot_shap_bar(shap_values[0], self.feature_names, title=title_suffix + " (bar)")
 
 
     def analyze_error_sources(self, errors_df, top_n=15):

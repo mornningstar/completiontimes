@@ -12,12 +12,6 @@ from sklearn.model_selection import TimeSeriesSplit
 
 from src.predictions.base_model import BaseModel
 
-try:
-    import cupy as cp
-    GPU_AVAILABLE = cp.cuda.is_available()
-except (ImportError, RuntimeError):
-    GPU_AVAILABLE = False
-
 
 class LightGBMModel(BaseModel):
     def __init__(self, auto_tune=True):
@@ -53,7 +47,8 @@ class LightGBMModel(BaseModel):
                 'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
                 'reg_alpha': trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True),
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
-                'random_state': 42
+                'random_state': 42,
+                'device_type': 'cpu'
             }
 
             mses = []
