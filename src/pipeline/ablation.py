@@ -62,7 +62,7 @@ class AblationStudy:
                 logging.info(f"Running ablation study: {ablation['name']} for model: {model_name}")
 
                 # 2. Select the subset of features for this ablation run
-                columns_to_use = self._get_columns_for_ablation(master_df, ablation["include"], feature_type)
+                columns_to_use = self._get_columns_for_ablation(master_df, ablation["include"])
                 ablation_df = master_df[columns_to_use]
 
                 ablation_categorical_cols = [col for col in all_categorical_cols if col in ablation_df.columns]
@@ -97,9 +97,9 @@ class AblationStudy:
 
         return ablation_results
 
-    def _get_columns_for_ablation(self, df: pd.DataFrame, include_groups: list[str], feature_type: str):
+    def _get_columns_for_ablation(self, df: pd.DataFrame, include_groups: list[str]):
         essential_cols = {
-            "path", "date", "completion_date", "completion_reason", "committer",
+            "path", "date", "completion_date", "completion_reason", "committer", "committer_grouped",
             "days_until_completion"
         }
         selected_cols = {col for col in df.columns if col in essential_cols}

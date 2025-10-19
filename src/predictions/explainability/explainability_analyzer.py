@@ -112,7 +112,7 @@ class ExplainabilityAnalyzer:
                 display_features=X,
                 show=False
             )
-
+            plt.title(f"SHAP Interaction: '{main_feature_name}' vs '{interaction_feature_name}'", fontsize=12)
             plt.tight_layout()
             filename = f"shap_interaction_{main_feature_name}_vs_{interaction_feature_name}.png"
             self.model_plotter.save_plot(filename)
