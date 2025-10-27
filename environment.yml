@@ -15,7 +15,7 @@ dependencies:
   - cupy
   - ocl-icd-system
 
-  - lightgbm-gpu
+  - lightgbm
   - xgboost
   - pmdarima
   - statsmodels

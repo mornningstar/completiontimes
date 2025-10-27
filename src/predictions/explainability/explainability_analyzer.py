@@ -9,9 +9,10 @@ from sklearn.inspection import PartialDependenceDisplay
 
 
 class ExplainabilityAnalyzer:
-    def __init__(self, model, feature_names, model_plotter):
+    def __init__(self, model, feature_names, categorical_features, model_plotter):
         self.model = model
         self.feature_names = feature_names
+        self.categorical_features = set(categorical_features or [])
         self.model_plotter = model_plotter
 
         self.logging = logging.getLogger(self.__class__.__name__)
@@ -105,14 +106,18 @@ class ExplainabilityAnalyzer:
             interaction_feature_idx = top_feature_indices[i]
             interaction_feature_name = self.feature_names[interaction_feature_idx]
 
-            plt.figure()  # Ensure a new figure is created
+            fig, ax = plt.subplots()
+            
             shap.dependence_plot(
                 (main_feature_name, interaction_feature_name),
                 shap_interaction_values, X,
                 display_features=X,
-                show=False
+                show=False,
+                ax=ax
             )
-            plt.title(f"SHAP Interaction: '{main_feature_name}' vs '{interaction_feature_name}'", fontsize=12)
+
+            ax.set_ylabel("")
+            plt.title(f"SHAP Interaction: '{main_feature_name}' vs '{interaction_feature_name}'")
             plt.tight_layout()
             filename = f"shap_interaction_{main_feature_name}_vs_{interaction_feature_name}.png"
             self.model_plotter.save_plot(filename)
@@ -127,13 +132,17 @@ class ExplainabilityAnalyzer:
         for feat1, feat2 in hard_coded_pairs:
             if feat1 in X.columns and feat2 in X.columns:
                 try:
-                    plt.figure()
+                    fig, ax = plt.subplots()
+                    
                     shap.dependence_plot(
                         (feat1, feat2),
                         shap_interaction_values, X,
-                        # display_features=X_df,
-                        show=False
+                        show=False,
+                        ax=ax
                     )
+
+                    ax.set_ylabel("")
+                    ax.set_title(f"SHAP Interaction: '{feat1}' vs '{feat2}'")
                     plt.tight_layout()
                     filename = f"shap_interaction_manual_{feat1}_vs_{feat2}.png"
                     self.model_plotter.save_plot(filename)
@@ -214,25 +223,42 @@ class ExplainabilityAnalyzer:
                                        xlabel="Directory", ylabel="Absolute Error",
                                        filename="error_dist_by_dir.png")
 
-    def analyze_pdp_ice(self, X, top_n_features=5):
+    def analyze_pdp_ice(self, X, top_n_features=5, top_n_categorical_to_pair=3):
         if not hasattr(self.model.model, "feature_importances_"):
             self.logging.warning("Model does not support feature importances, skipping PDP/ICE plots.")
             return
 
         importances = self.model.model.feature_importances_
-        top_feature_indices = np.argsort(importances)[-top_n_features:]
 
-        self.logging.info(f"Generating PDP/ICE plots for top {top_n_features} features...")
+        all_sorted_indices = np.argsort(importances)[::-1]
 
-        for feature_idx in top_feature_indices:
+        top_numerical_indices = []
+        top_categorical_indices = []
+
+        for idx in all_sorted_indices:
+            feature_name = self.feature_names[idx]
+            if feature_name in self.categorical_features:
+                if len(top_categorical_indices) < top_n_categorical_to_pair:
+                    top_categorical_indices.append(idx)
+            else:
+                if len(top_numerical_indices) < top_n_features:
+                    top_numerical_indices.append(idx)
+
+            # Stop searching once we have enough of both
+            if len(top_numerical_indices) == top_n_features and len(
+                    top_categorical_indices) == top_n_categorical_to_pair:
+                break
+
+        self.logging.info(f"Generating 1D PDP/ICE plots for top {len(top_numerical_indices)} numerical features...")
+
+        # 1D Plot (for top numerical)
+        for feature_idx in top_numerical_indices:
             feature_name = self.feature_names[feature_idx]
-
-            fig, ax = plt.subplots(figsize=(8,6))
-
+            fig, ax = plt.subplots(figsize=(8, 6))
             PartialDependenceDisplay.from_estimator(
                 self.model.model,
                 X,
-                features=[feature_idx],
+                features=[feature_idx],  # single feature for 1D
                 feature_names=self.feature_names,
                 kind="both",
                 subsample=50,
@@ -240,6 +266,35 @@ class ExplainabilityAnalyzer:
                 pd_line_kw={"color": "red", "linestyle": "--", "linewidth": 2},
                 ax=ax
             )
-
-            filename = f"pdp_ice_{feature_name}.png"
+            filename = f"pdp_ice_1D_{feature_name}.png"
             self.model_plotter.save_plot(filename)
+
+        # 2D Plot Logic (Pairing top numerical vs top categorical)
+        top_categorical_names = [self.feature_names[i] for i in top_categorical_indices]
+        if not top_categorical_names:
+            self.logging.warning("No categorical features found or passed for 2D PDP plots.")
+            return
+
+        self.logging.info(f"Generating 2D PDP plots for interactions with top categorical: {top_categorical_names}")
+
+        for num_idx in top_numerical_indices:
+            num_name = self.feature_names[num_idx]
+
+            for cat_name in top_categorical_names:
+                self.logging.debug(f"Plotting 2D PDP for: {num_name} vs {cat_name}")
+                fig, ax = plt.subplots(figsize=(10, 8))
+                try:
+                    PartialDependenceDisplay.from_estimator(
+                        self.model.model,
+                        X,
+                        features=[(num_name, cat_name)],
+                        feature_names=self.feature_names,
+                        kind="average",
+                        ax=ax
+                    )
+                    ax.set_title(f"2D PDP: {num_name} vs {cat_name}")
+                    filename = f"pdp_2D_{num_name}_vs_{cat_name}.png"
+                    self.model_plotter.save_plot(filename)
+                except Exception as e:
+                    self.logging.warning(f"Could not plot 2D PDP for {num_name} vs {cat_name}: {e}")
+                    plt.close(fig)

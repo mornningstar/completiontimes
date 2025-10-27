@@ -114,7 +114,7 @@ class RegressionModelTrainer:
         #Evaluation
         y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df,
                                                                         final_feature_cols, max_days=adaptive_cap)
-        error_path = self.evaluator.perform_error_analysis(errors_df, final_feature_cols, self.model,
+        error_path = self.evaluator.perform_error_analysis(errors_df, final_feature_cols, categorical_cols, self.model,
                                                            self.model_plotter, self.output_dir, self.logger)
 
         self.logger.info(f"Performing analysis of performance vs. file age for '{self.split_strategy}' split...")

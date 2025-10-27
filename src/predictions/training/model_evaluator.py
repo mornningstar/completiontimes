@@ -75,7 +75,7 @@ class ModelEvaluator:
         self.model_plotter.plot_mae_by_age(age_analysis)
 
     @staticmethod
-    def perform_error_analysis(errors_df, feature_cols, model, model_plotter, output_dir, logger,
+    def perform_error_analysis(errors_df, feature_cols, categorical_cols, model, model_plotter, output_dir, logger,
                                threshold: float = 30.0):
         errors_df["error_type"] = "ok"
         errors_df.loc[errors_df["residual"] > threshold, "error_type"] = "underestimated"
@@ -88,7 +88,8 @@ class ModelEvaluator:
         logger.info("Error types:\n{}".format(error_counts))
         model_plotter.plot_error_types_pie(errors_df["error_type"])
 
-        explain = ExplainabilityAnalyzer(model=model, feature_names=feature_cols, model_plotter=model_plotter)
+        explain = ExplainabilityAnalyzer(model=model, feature_names=feature_cols, categorical_features=categorical_cols,
+                                         model_plotter=model_plotter)
         explain.analyze_worst_predictions(errors_df, top_n=3)
         explain.analyze_best_predictions(errors_df, top_n=3)
         explain.analyze_error_sources(errors_df)

@@ -11,6 +11,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
 
 from src.predictions.base_model import BaseModel
+from config import globals
 
 
 class LightGBMModel(BaseModel):
@@ -48,7 +49,7 @@ class LightGBMModel(BaseModel):
                 'reg_alpha': trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True),
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
                 'random_state': 42,
-                'device_type': 'cpu'
+                'n_jobs': globals.CPU_LIMIT
             }
 
             mses = []
@@ -71,7 +72,7 @@ class LightGBMModel(BaseModel):
         study.optimize(objective, n_trials=n_trials)
         elapsed_time = time.time() - start_time
 
-        final_params = {**study.best_params, 'random_state': 42}
+        final_params = {**study.best_params, 'random_state': 42, 'n_jobs': globals.CPU_LIMIT}
 
         self.model = LGBMRegressor(**final_params)
         self.logger.info(f"Best score: {study.best_value:.4f}")
