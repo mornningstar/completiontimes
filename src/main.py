@@ -52,6 +52,8 @@ async def process_project(project, token_bucket: TokenBucket = None):
         logging.info("images_dir: {}".format(images_dir))
         models_dir = os.path.join(run_output_dir, "models")
 
+        master_results_path = os.path.join(run_output_dir, "results.csv")
+
         file_repo = FileRepository(project_name)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
         AsyncDatabase.URI = config['mongo']['uri']
@@ -80,16 +82,18 @@ async def process_project(project, token_bucket: TokenBucket = None):
                 images_dir,
                 models_dir,
                 source_directory,
-                timestamp
+                timestamp,
+                master_results_path
             )
 
             ablation_results = await ablation_study.run(models=models)
+            logging.info(f"Ablation study for {project_name} complete. Results saved to {master_results_path}")
 
-            if ablation_results:
-                results_df = pd.DataFrame(ablation_results)
-                results_path = os.path.join(run_output_dir, "results.csv")
-                results_df.to_csv(results_path, index=False)
-                logging.info(f"Ablation study results saved to {results_path}")
+            # if ablation_results:
+            #     results_df = pd.DataFrame(ablation_results)
+            #     results_path = os.path.join(run_output_dir, "results.csv")
+            #     results_df.to_csv(results_path, index=False)
+            #     logging.info(f"Ablation study results saved to {results_path}")
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))

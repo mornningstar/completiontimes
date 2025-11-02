@@ -14,7 +14,7 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
     def get_feature_names(self, df: pd.DataFrame) -> list[str]:
         return [
             'commit_num', 'commit_interval_days', 'is_first_commit', 'age_in_days', 'commits_per_day_so_far',
-            'std_commit_interval', 'avg_commit_interval', 'weekday', 'month'
+            'std_commit_interval', 'avg_commit_interval', 'weekday', 'month', 'max_commit_interval_to_date'
         ] + [f'commits_last_{w}d' for w in self.windows] + [f'commits_ratio_{w}d' for w in self.windows]
 
     def generate(self, df: pd.DataFrame, windows: list[int] = [7, 30], **kwargs) -> tuple[pd.DataFrame, list[str]]:
@@ -64,6 +64,8 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
         # Commit interval features
         time_diff = df.groupby("path")["date"].diff()
         df["commit_interval_days"] = time_diff.dt.days.fillna(0)
+        df['max_commit_interval_to_date'] = (df.groupby('path')['commit_interval_days'].expanding().max().
+                                             reset_index(level=0, drop=True))
         df["is_first_commit"] = (df["commit_interval_days"] == 0).astype(int)
 
         # Expanding statistics on commit intervals

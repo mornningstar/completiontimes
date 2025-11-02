@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+from config import globals
 
 
 class CompletionDateLabler:
@@ -34,6 +35,17 @@ class CompletionDateLabler:
         df['completion_reason'] = None
 
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.tz_localize(None)
+
+        required_cols = [
+            "commit_interval_days",
+            "line_change",
+            "commit_num",
+            "age_in_days"
+        ]
+
+        for col in required_cols:
+            if col not in df.columns:
+                raise ValueError(f"'{col}' must be present before calling this labler.")
 
         if "commit_interval_days" not in df.columns:
             raise ValueError("'commit_interval_days' must be calculated before calling this labler.")
@@ -85,18 +97,25 @@ class CompletionDateLabler:
 
     def _check_stable_line_change_window(self, group):
         group = group.sort_values("date").reset_index(drop=True)
-        min_commits, min_days, confirm_idle_days = 3, 14, 30
+        min_days, confirm_idle_days = 14, 30
         now = pd.Timestamp.now().normalize()
-        median_change = group["line_change"].median()
-        threshold = max(3, median_change * 0.15)
 
-        if group.iloc[-1]["line_change"] > threshold:
-            # If the very last commit isn't stable, there's no valid stable ending
+        last_commit = group.iloc[-1]
+        is_mature = (
+                last_commit["commit_num"] >= globals.MATURITY_MIN_COMMITS and 
+                last_commit["age_in_days"] >= globals.MATURITY_MIN_AGE_DAYS
+        )
+        is_stable = last_commit["line_change"] <= globals.STABILITY_ABS_THRESHOLD_LINES
+
+        if not (is_mature and is_stable):
             return None, None
 
         stable_block_indices = []
         for idx in range(len(group) - 1, -1, -1):
-            if group.loc[idx, "line_change"] <= threshold:
+            commit = group.loc[idx]
+
+            # Check for stability (absolute threshold)
+            if commit["line_change"] <= globals.STABILITY_ABS_THRESHOLD_LINES:
                 stable_block_indices.append(idx)
             else:
                 break
@@ -105,7 +124,7 @@ class CompletionDateLabler:
             return None, None
 
         stable_block = group.loc[sorted(stable_block_indices)]
-        if len(stable_block) < min_commits:
+        if len(stable_block) < globals.STABILITY_MIN_COMMITS:
             return None, None
 
         block_duration = (stable_block["date"].iloc[-1] - stable_block["date"].iloc[0]).days

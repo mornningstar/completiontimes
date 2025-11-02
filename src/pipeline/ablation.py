@@ -1,15 +1,19 @@
 import logging
 import os
+import threading
 
 import pandas as pd
 
 from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
 from src.data_handling.features.feature_generator_registry import feature_generator_registry
 from src.pipeline.configs import ENGINEER_BY_TYPE, TRAINER_BY_TYPE
+from src.predictions.training.results.results import EvaluationMetrics
 
+_csv_lock = threading.Lock()
 
 class AblationStudy:
-    def __init__(self, project_name, file_repo, plotter, images_dir, models_dir, source_directory, timestamp):
+    def __init__(self, project_name, file_repo, plotter, images_dir, models_dir, source_directory, timestamp,
+                 master_results_path):
         self.project_name = project_name
         self.file_repo = file_repo
         self.plotter = plotter
@@ -17,6 +21,7 @@ class AblationStudy:
         self.models_dir = models_dir
         self.source_directory = source_directory
         self.timestamp = timestamp
+        self.master_results_path = master_results_path
         self._features_cache = {}
 
     async def _get_or_create_features(self, model_cfg):
@@ -39,6 +44,46 @@ class AblationStudy:
             logging.info(f"Cached features for {cache_key} - rows = {len(engineered_df)}")
 
         return self._features_cache[cache_key]
+
+    def _append_to_master_results(self, result_data: dict):
+        """
+        Safely appends a new result row to the master CSV file.
+        Creates the file and header if it doesn't exist.
+        """
+        with _csv_lock:
+            file_exists = os.path.exists(self.master_results_path)
+
+            desired_headers = [
+                'project',
+                'model',
+                'split_Strategy',
+                'configuration',
+                'timestamp',
+                'metrics'
+            ]
+
+            formatted_data = {}
+
+            formatted_data['project'] = result_data.get('project')
+            formatted_data['model'] = result_data.get('model')
+            formatted_data['split_Strategy'] = result_data.get('split_Strategy')
+            formatted_data['configuration'] = result_data.get('configuration')
+            formatted_data['timestamp'] = result_data.get('timestamp')
+
+            if 'metrics' in result_data and isinstance(result_data['metrics'], EvaluationMetrics):
+                formatted_data['metrics'] = str(vars(result_data['metrics']))
+            else:
+                formatted_data['metrics'] = None
+
+            result_df = pd.DataFrame([formatted_data], columns=desired_headers)
+
+            try:
+                if not file_exists:
+                    result_df.to_csv(self.master_results_path, index=False, mode='w', header=True)
+                else:
+                    result_df.to_csv(self.master_results_path, index=False, mode='a', header=False)
+            except Exception as e:
+                logging.error(f"Failed to append to master results CSV: {e}")
 
     async def run(self, models):
         ablation_results = []
@@ -94,13 +139,15 @@ class AblationStudy:
                     result_data.update(vars(training_result))
 
                 ablation_results.append(result_data)
+                self._append_to_master_results(result_data.copy())
+                logging.debug(f"Appended results for {model_name} / {ablation['name']} to {self.master_results_path}")
 
         return ablation_results
 
     def _get_columns_for_ablation(self, df: pd.DataFrame, include_groups: list[str]):
         essential_cols = {
             "path", "date", "completion_date", "completion_reason", "committer", "committer_grouped",
-            "days_until_completion"
+            "days_until_completion", "commit_num", "age_in_days"
         }
         selected_cols = {col for col in df.columns if col in essential_cols}
 

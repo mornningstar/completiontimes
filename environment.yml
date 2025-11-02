@@ -1,8 +1,9 @@
 name: completiontimes
+
 channels:
   - rapidsai
   - conda-forge
-  - defaults
+
 dependencies:
   - python=3.11
   - pandas
@@ -10,15 +11,12 @@ dependencies:
   - numpy=1.26.4
   - scipy
 
-  - cudatoolkit=12.0
   - cuml
   - cupy
   - ocl-icd-system
 
   - lightgbm
   - xgboost
-  - pmdarima
-  - statsmodels
   - mlxtend
   - shap
   - tslearn
@@ -27,6 +25,7 @@ dependencies:
   - aiohttp
   - motor
   - backoff
+  - requests
 
   - pyyaml
   - python-dotenv
@@ -35,6 +34,7 @@ dependencies:
 
   - matplotlib
   - seaborn
+  - lifelines
 
   - pip
   - pip:
