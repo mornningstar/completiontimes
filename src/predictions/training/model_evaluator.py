@@ -15,11 +15,24 @@ class ModelEvaluator:
         self.output_dir = output_dir
         self.logger = logger
 
-    def evaluate(self, x_test, y_test, test_df, feature_cols, max_days):
+    @staticmethod
+    def _calculate_smape(y_true, y_pred):
+        """
+        Calculates Symmetric Mean Absolute Percentage Error (sMAPE).
+        """
+        numerator = 2 * np.abs(y_true - y_pred)
+        denominator = np.abs(y_true) + np.abs(y_pred)
+        errors = numerator / denominator
+
+        # Handle the 0/0 case: if both true and pred are 0, error is 0
+        errors = np.nan_to_num(errors, nan=0.0)
+
+        return np.mean(errors)
+
+    def evaluate(self, x_test, y_test, test_df, feature_cols):
         y_pred_log = self.model.evaluate(x_test, y_test)
 
-        max_safe_log = np.log1p(max_days)
-        y_pred_log = np.clip(y_pred_log, a_min=None, a_max=max_safe_log)
+        y_pred_log = np.clip(y_pred_log, a_min=None, a_max=15)
 
         y_pred = np.maximum(np.expm1(y_pred_log), 0)
         
@@ -39,7 +52,8 @@ class ModelEvaluator:
         mae = mean_absolute_error(y_true=y_test, y_pred=y_pred)
         mae_std = result_df["abs_error"].std()
         rmse = np.sqrt(mse)
-        metrics = EvaluationMetrics(mse=mse, mae=mae, mae_std=mae_std, rmse=rmse)
+        smape = self._calculate_smape(y_test, y_pred)
+        metrics = EvaluationMetrics(mse=mse, mae=mae, mae_std=mae_std, rmse=rmse, smape=smape)
 
         self.logger.info(f"Evaluation — MSE: {metrics.mse:.2f}, MAE: {metrics.mae:.2f} (std: {metrics.mae_std:.2f}), "
                          f"RMSE: {metrics.rmse:.2f}")

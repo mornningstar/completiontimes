@@ -69,10 +69,10 @@ class LightGBMModel(BaseModel):
 
         study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42))
         start_time = time.time()
-        study.optimize(objective, n_trials=n_trials)
+        study.optimize(objective, n_trials=n_trials, n_jobs=8)
         elapsed_time = time.time() - start_time
 
-        final_params = {**study.best_params, 'random_state': 42, 'n_jobs': globals.CPU_LIMIT}
+        final_params = {**study.best_params, 'random_state': 42, 'n_jobs': globals.CPU_LIMIT // 8}
 
         self.model = LGBMRegressor(**final_params)
         self.logger.info(f"Best score: {study.best_value:.4f}")

@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import asyncio
 
 import pandas as pd
 
@@ -69,11 +70,12 @@ class AblationStudy:
             formatted_data['split_Strategy'] = result_data.get('split_Strategy')
             formatted_data['configuration'] = result_data.get('configuration')
             formatted_data['timestamp'] = result_data.get('timestamp')
+            formatted_data['metrics'] = result_data.get('metrics')
 
-            if 'metrics' in result_data and isinstance(result_data['metrics'], EvaluationMetrics):
-                formatted_data['metrics'] = str(vars(result_data['metrics']))
-            else:
-                formatted_data['metrics'] = None
+            #if 'metrics' in result_data and isinstance(result_data['metrics'], EvaluationMetrics):
+                #formatted_data['metrics'] = str(vars(result_data['metrics']))
+            #else:
+                #formatted_data['metrics'] = None
 
             result_df = pd.DataFrame([formatted_data], columns=desired_headers)
 
@@ -123,7 +125,8 @@ class AblationStudy:
                 trainer = trainer_cls(self.project_name, model_cfg, ablation_images_dir, ablation_models_dir)
 
                 # 3. Train the model on the subset of features
-                training_result = trainer.train_and_evaluate((ablation_df, ablation_categorical_cols))
+                data_to_pass = (ablation_df, ablation_categorical_cols)
+                training_result = await asyncio.to_thread(trainer.train_and_evaluate, data_to_pass)
 
                 result_data = {
                     "project": self.project_name,
@@ -147,7 +150,7 @@ class AblationStudy:
     def _get_columns_for_ablation(self, df: pd.DataFrame, include_groups: list[str]):
         essential_cols = {
             "path", "date", "completion_date", "completion_reason", "committer", "committer_grouped",
-            "days_until_completion", "commit_num", "age_in_days"
+            "days_until_completion"
         }
         selected_cols = {col for col in df.columns if col in essential_cols}
 

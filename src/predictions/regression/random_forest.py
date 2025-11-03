@@ -51,12 +51,12 @@ class RandomForestModel(BaseModel):
 
             model = RandomForestRegressor(random_state=42, **params)
             score = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter, scoring=scoring,
-                                    n_jobs=globals.CPU_LIMIT)
+                                    n_jobs=globals.CPU_LIMIT // 8)
             return score.mean()
     
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')
         start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout)
+        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=8)
         elapsed_time = time.time() - start_time
 
         self.model = RandomForestRegressor(random_state=42, **study.best_params)

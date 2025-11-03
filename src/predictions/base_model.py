@@ -1,13 +1,13 @@
 import logging
 
 import joblib
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 
 
 class BaseModel:
     def __init__(self):
         self.model = None
-        self.scaler = StandardScaler()
+        self.scaler = RobustScaler()
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def scale_data(self, data):

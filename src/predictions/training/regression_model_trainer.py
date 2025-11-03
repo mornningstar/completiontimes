@@ -88,16 +88,6 @@ class RegressionModelTrainer:
         x_test = x_test[x_train.columns]
         final_feature_cols = x_train.columns.tolist()
 
-        if not train_df.empty and "days_until_completion" in train_df.columns:
-            adaptive_cap = np.percentile(train_df["days_until_completion"].dropna(), 99)
-            adaptive_cap = max(adaptive_cap, 365)
-        else:
-            adaptive_cap = 2000
-
-        self.logger.info(
-            f"Using an adaptive prediction cap of {adaptive_cap:.0f} days (based on 99th percentile of training data)."
-        )
-
         y_train_log = np.log1p(train_df["days_until_completion"].values)
         y_test_log = np.log1p(test_df["days_until_completion"].values)
 
@@ -112,8 +102,7 @@ class RegressionModelTrainer:
                 self.model_plotter.plot_model_feature_importance(final_feature_cols, importances)
 
         #Evaluation
-        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df,
-                                                                        final_feature_cols, max_days=adaptive_cap)
+        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, final_feature_cols)
         error_path = self.evaluator.perform_error_analysis(errors_df, final_feature_cols, categorical_cols, self.model,
                                                            self.model_plotter, self.output_dir, self.logger)
 
@@ -132,6 +121,7 @@ class RegressionModelTrainer:
             "mae": round(metrics.mae, 4),
             "mae_std": round(metrics.mae_std, 4),
             "rmse": round(metrics.rmse, 4),
+            "smape: round(metrics.smape, 4,"
             "model_path": model_path,
         }
         

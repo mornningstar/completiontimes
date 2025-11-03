@@ -10,6 +10,7 @@ class EvaluationMetrics:
     mae_std: float
     rmse: float
 
+
 @dataclass
 class TrainingResult:
     """ Container for evaluation results. """
