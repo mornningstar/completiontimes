@@ -192,7 +192,7 @@ class ModelPlotter(Plotter):
 
     def plot_learning_curves(self, estimator, X, y, groups=None, cv=5):
         train_sizes, train_scores, validation_scores = learning_curve(
-            estimator, X, y, groups=groups, cv=cv, scoring='neg_mean_squared_error', n_jobs=globals.CPU_LIMIT
+            estimator, X, y, groups=groups, cv=cv, scoring='neg_mean_squared_error', n_jobs=1
         )
 
         train_scores_mean = -np.mean(train_scores, axis=1)

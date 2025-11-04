@@ -9,7 +9,7 @@ class EvaluationMetrics:
     mae: float
     mae_std: float
     rmse: float
-
+    mdae: float
 
 @dataclass
 class TrainingResult:

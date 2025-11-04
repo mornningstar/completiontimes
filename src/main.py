@@ -33,15 +33,27 @@ for project in config["projects"]:
     for model in project["models"]:
         model["class"] = get_model_class(model["class"])
 
-async def process_project(project, token_bucket: TokenBucket = None):
+async def run_data_fetching(project, token_bucket: TokenBucket = None):
     project_name = project['name']
-    models = project.get('models', [])
     get_newest = project.get('get_newest', True)
-    source_directory = project.get('source_directory', "src")
-
-    is_ablation_study = project.get('ablation', False)
 
     auth_token = os.path.expandvars(config['github']['token'])
+
+    if get_newest:
+        orchestrator = SyncOrchestrator(auth_token, project_name, token_bucket)
+        logging.info(f"Starting processing for project: {project_name}")
+        await orchestrator.run()
+        logging.debug("Finished calling synchronised orchestrator")
+    else:
+        logging.info("Skipping fetch of new commit history")
+
+async def run_model_training(project):
+    project_name = project['name']
+    models = project.get('models', [])
+    source_directory = project.get('source_directory', "src")
+    is_ablation_study = project.get('ablation', False)
+
+    logging.info(f"--- Starting model training for: {project_name} ---")
 
     try:
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -56,24 +68,12 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
         file_repo = FileRepository(project_name)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
-        AsyncDatabase.URI = config['mongo']['uri']
-        AsyncDatabase.DATABASE_NAME = config['mongo']['database']
-        await AsyncDatabase.initialize()
-        
-        if get_newest:
-            orchestrator = SyncOrchestrator(auth_token, project_name, token_bucket)
-            logging.info(f"Starting processing for project: {project_name}")
-            await orchestrator.run()
-            logging.debug("Finished calling synchronised orchestrator")
-        else:
-            logging.info("Skipping fetch of new commit history")
 
         feature_pipeline = FeatureEngineeringPipeline(file_repo, plotter, source_directory)
 
         if not is_ablation_study:
             training_pipe = ModelTrainingPipeline(project_name, models, feature_pipeline, images_dir, models_dir)
             await training_pipe.run()
-
         else:
             ablation_study = AblationStudy(
                 project_name,
@@ -86,14 +86,8 @@ async def process_project(project, token_bucket: TokenBucket = None):
                 master_results_path
             )
 
-            ablation_results = await ablation_study.run(models=models)
+            await ablation_study.run(models=models)
             logging.info(f"Ablation study for {project_name} complete. Results saved to {master_results_path}")
-
-            # if ablation_results:
-            #     results_df = pd.DataFrame(ablation_results)
-            #     results_path = os.path.join(run_output_dir, "results.csv")
-            #     results_df.to_csv(results_path, index=False)
-            #     logging.info(f"Ablation study results saved to {results_path}")
 
     except Exception:
         logging.exception('Error while processing project {}'.format(project_name))
@@ -103,8 +97,16 @@ async def process_project(project, token_bucket: TokenBucket = None):
 
 async def main():
     shared_token_bucket = TokenBucket()
-    tasks = [process_project(project, shared_token_bucket) for project in config["projects"]]
+
+    AsyncDatabase.URI = config['mongo']['uri']
+    AsyncDatabase.DATABASE_NAME = config['mongo']['database']
+    await AsyncDatabase.initialize()
+
+    tasks = [run_data_fetching(project, shared_token_bucket) for project in config["projects"]]
     await asyncio.gather(*tasks)
+
+    for project in config["projects"]:
+        await run_model_training(project)
 
 if __name__ == '__main__':
     asyncio.run(main())

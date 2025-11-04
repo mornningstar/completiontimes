@@ -48,12 +48,13 @@ class GradientBoosting(BaseModel):
                 "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 5),
                 "max_features": trial.suggest_categorical("max_features", ["sqrt", "log2", 0.3, 0.5]),
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-                'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.2)
+                'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.2),
+                'n_jobs': 1
             }
 
             model = GradientBoostingRegressor(random_state=42, **param_grid)
             scores = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter,
-                                     scoring=scoring, n_jobs=globals.CPU_LIMIT // 8)
+                                     scoring=scoring, n_jobs=(globals.CPU_LIMIT // 8))
             return scores.mean()
 
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')

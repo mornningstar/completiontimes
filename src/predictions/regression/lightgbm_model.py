@@ -8,7 +8,7 @@ from lightgbm import LGBMRegressor
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from optuna.samplers import TPESampler
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
 from src.predictions.base_model import BaseModel
 from config import globals
@@ -20,7 +20,8 @@ class LightGBMModel(BaseModel):
         self.model = None
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5, split_strategy='by_file'):
+    def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5, scoring='neg_mean_squared_error',
+                  timeout=None, split_strategy='by_file'):
         self.logger.info(f"Starting LightGBM hyperparameter tuning with '{split_strategy}' strategy...")
 
         if split_strategy == 'by_file':
@@ -28,8 +29,10 @@ class LightGBMModel(BaseModel):
             num_groups = len(unique_groups)
             test_size = max(1, int(num_groups * 0.2))
             splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
+            cv_groups = groups
         elif split_strategy == 'by_history':
             splitter = TimeSeriesSplit(n_splits=cv)
+            cv_groups = None
         else:
             raise ValueError(f"Unknown split_strategy: {split_strategy}")
 
@@ -49,27 +52,18 @@ class LightGBMModel(BaseModel):
                 'reg_alpha': trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True),
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
                 'random_state': 42,
-                'n_jobs': globals.CPU_LIMIT
+                'n_jobs': 1
             }
 
-            mses = []
+            model = LGBMRegressor(**trial_params, verbose=-1)
+            scores = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter,
+                            scoring=scoring, n_jobs=(globals.CPU_LIMIT // 8))
+            return scores.mean()
 
-            split_args = (x_train, y_train, groups) if split_strategy == 'by_file' else (x_train, y_train)
-            for train_idx, valid_idx in splitter.split(*split_args):
-                X_train, X_val = x_train.iloc[train_idx], x_train.iloc[valid_idx]
-                Y_train, Y_val = y_train[train_idx], y_train[valid_idx]
-                m = LGBMRegressor(**trial_params, verbose=-1)
-                m.fit(X_train, Y_train,
-                      eval_set=[(X_val, Y_val)],
-                      eval_metric="mse",
-                      callbacks=[lightgbm.early_stopping(stopping_rounds=75)])
-                preds = m.predict(X_val)
-                mses.append(mean_squared_error(Y_val, preds))
-            return np.mean(mses)
-
-        study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=42))
+        study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize',
+                                    sampler=TPESampler(seed=42))
         start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, n_jobs=8)
+        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=8)
         elapsed_time = time.time() - start_time
 
         final_params = {**study.best_params, 'random_state': 42, 'n_jobs': globals.CPU_LIMIT // 8}

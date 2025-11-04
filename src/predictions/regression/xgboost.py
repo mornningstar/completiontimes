@@ -46,11 +46,12 @@ class XGBoostModel(BaseModel):
                 'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 1.0, log=True),
                 'gamma': trial.suggest_float('gamma', 1e-8, 1.0, log=True),
                 'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
-                'random_state': 42
+                'random_state': 42,
+                'n_jobs': 1
             }
             model = xgboost.XGBRegressor(**params)
             score = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter, scoring=scoring,
-                                    n_jobs=globals.CPU_LIMIT // 8)
+                                    n_jobs=(globals.CPU_LIMIT // 8))
             return score.mean()
 
         study = optuna.create_study(direction='maximize')

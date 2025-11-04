@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, median_absolute_error
 
 from src.predictions.explainability.explainability_analyzer import ExplainabilityAnalyzer
 from src.predictions.training.results.results import EvaluationMetrics, ErrorAnalysisPath, EvaluationPath
@@ -52,8 +52,9 @@ class ModelEvaluator:
         mae = mean_absolute_error(y_true=y_test, y_pred=y_pred)
         mae_std = result_df["abs_error"].std()
         rmse = np.sqrt(mse)
-        smape = self._calculate_smape(y_test, y_pred)
-        metrics = EvaluationMetrics(mse=mse, mae=mae, mae_std=mae_std, rmse=rmse, smape=smape)
+        mdae = median_absolute_error(y_true=y_test, y_pred=y_pred)
+
+        metrics = EvaluationMetrics(mse=mse, mae=mae, mae_std=mae_std, rmse=rmse, mdae=mdae)
 
         self.logger.info(f"Evaluation — MSE: {metrics.mse:.2f}, MAE: {metrics.mae:.2f} (std: {metrics.mae_std:.2f}), "
                          f"RMSE: {metrics.rmse:.2f}")
@@ -106,7 +107,17 @@ class ModelEvaluator:
                                          model_plotter=model_plotter)
         explain.analyze_worst_predictions(errors_df, top_n=3)
         explain.analyze_best_predictions(errors_df, top_n=3)
-        explain.analyze_error_sources(errors_df)
+
+        stats_dfs = explain.analyze_error_sources(errors_df)
+        stats_by_bins, stats_by_ext, stats_by_dir, stats_by_reason, stats_by_committer = stats_dfs
+
+        stats_by_bins.to_csv(os.path.join(output_dir, "error_stats_by_actual_bin.csv"))
+        stats_by_ext.to_csv(os.path.join(output_dir, "error_stats_by_extension.csv"))
+        stats_by_dir.to_csv(os.path.join(output_dir, "error_stats_by_directory.csv"))
+        stats_by_reason.to_csv(os.path.join(output_dir, "error_stats_by_reason.csv"))
+        if stats_by_committer is not None:
+            stats_by_committer.to_csv(os.path.join(output_dir, "error_stats_by_committer.csv"))
+
         explain.analyze_shap_by_committer(errors_df)
 
         sample_for_pdp = errors_df.sample(n=min(500, len(errors_df)), random_state=42)

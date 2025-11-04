@@ -72,11 +72,6 @@ class AblationStudy:
             formatted_data['timestamp'] = result_data.get('timestamp')
             formatted_data['metrics'] = result_data.get('metrics')
 
-            #if 'metrics' in result_data and isinstance(result_data['metrics'], EvaluationMetrics):
-                #formatted_data['metrics'] = str(vars(result_data['metrics']))
-            #else:
-                #formatted_data['metrics'] = None
-
             result_df = pd.DataFrame([formatted_data], columns=desired_headers)
 
             try:

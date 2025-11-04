@@ -189,29 +189,33 @@ class ExplainabilityAnalyzer:
         def get_error_stats(group_by_col):
             stats = (errors_df.groupby(group_by_col)["abs_error"].agg(['mean', 'std']).sort_values(
                 by="mean", ascending=False).head(top_n))
-            return stats['mean'], stats['std']
+            return stats
 
-        mae_by_ext, std_by_ext = get_error_stats("extension")
-        mae_by_dir, std_by_dir = get_error_stats("top_dir")
-        mae_by_reason, std_by_reason = get_error_stats("completion_reason")
+        stats_by_ext = get_error_stats("extension")
+        stats_by_dir = get_error_stats("top_dir")
+        stats_by_reason = get_error_stats("completion_reason")
+        stats_by_committer = None
+
         if "committer_grouped" in errors_df.columns:
-            mae_by_committer, std_by_committer = get_error_stats("committer_grouped")
-        else:
-            mae_by_committer, std_by_committer = (None, None)
+            stats_by_committer = get_error_stats("committer_grouped")
 
-        mae_by_bins, std_by_bins = get_error_stats("true_bin")
+        stats_by_bins = get_error_stats("true_bin")
 
-        self.model_plotter.plot_bar(mae_by_ext, title="MAE per file type", xlabel="File Extension", ylabel="MAE",
-                                    yerr=std_by_ext)
-        self.model_plotter.plot_bar(mae_by_dir, title="MAE per top level directory", xlabel="Directory",
-                                    ylabel="MAE", yerr=std_by_dir, filename="mae_per_top_dir.png")
-        self.model_plotter.plot_bar(mae_by_reason, title="MAE per reason", xlabel="Completion Reason",
-                                    ylabel="MAE", yerr=std_by_reason, filename="mae_per_completion_reason.png")
-        if mae_by_committer is not None:
-            self.model_plotter.plot_bar(mae_by_committer, title="MAE per Committer", xlabel="Committer", ylabel="MAE",
-                                        yerr=std_by_committer, filename="mae_per_committer.png")
-        self.model_plotter.plot_bar(mae_by_bins, title="MAE per actual days", xlabel="Completion days bins",
-                                    ylabel="MAE", yerr=std_by_bins, filename="mae_per_completion_bins.png")
+        self.model_plotter.plot_bar(stats_by_ext['mean'], title="MAE per file type", xlabel="File Extension", ylabel="MAE",
+                                    yerr=stats_by_ext['std'])
+
+        self.model_plotter.plot_bar(stats_by_dir['mean'], title="MAE per top level directory", xlabel="Directory",
+                                    ylabel="MAE", yerr=stats_by_dir['std'], filename="mae_per_top_dir.png")
+
+        self.model_plotter.plot_bar(stats_by_reason['mean'], title="MAE per reason", xlabel="Completion Reason",
+                                    ylabel="MAE", yerr=stats_by_reason['std'], filename="mae_per_completion_reason.png")
+
+        if stats_by_committer is not None:
+            self.model_plotter.plot_bar(stats_by_committer['mean'], title="MAE per Committer", xlabel="Committer",
+                                        ylabel="MAE", yerr=stats_by_committer['std'], filename="mae_per_committer.png")
+
+        self.model_plotter.plot_bar(stats_by_bins['mean'], title="MAE per actual days", xlabel="Completion days bins",
+                                    ylabel="MAE", yerr=stats_by_bins['mean'], filename="mae_per_completion_bins.png")
 
         self.model_plotter.plot_violin(errors_df, x="extension", y="abs_error",
                                        title="Error Distribution per File Type",
@@ -222,6 +226,8 @@ class ExplainabilityAnalyzer:
                                        title="Error Distribution per Top Level Directory",
                                        xlabel="Directory", ylabel="Absolute Error",
                                        filename="error_dist_by_dir.png")
+
+        return stats_by_bins, stats_by_ext, stats_by_dir, stats_by_reason, stats_by_committer
 
     def analyze_pdp_ice(self, X, top_n_features=5, top_n_categorical_to_pair=3):
         if not hasattr(self.model.model, "feature_importances_"):
