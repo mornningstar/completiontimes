@@ -2,6 +2,7 @@ import os
 from typing import List
 
 from src.pipeline.configs import TRAINER_BY_TYPE
+from src.visualisations.model_plotting import ModelPlotter
 
 
 class ModelTrainingPipeline:
@@ -24,10 +25,12 @@ class ModelTrainingPipeline:
             model_specific_images_dir = os.path.join(self.images_dir, model_name, data_split)
             model_specific_model_dir = os.path.join(self.models_dir, model_name, data_split)
 
+            model_plotter = ModelPlotter(self.project_name, images_dir=model_specific_images_dir)
+
             trainer = trainer_cls(
                 self.project_name,
                 model_cfg,
-                images_dir=model_specific_images_dir,
+                model_plotter=model_plotter,
                 output_dir=model_specific_model_dir
             )
             trainer.train_and_evaluate(features_to_use)

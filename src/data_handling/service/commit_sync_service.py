@@ -7,12 +7,12 @@ from src.github.http_client import GitHubClient
 class CommitSyncService:
     RESULTS_PER_PAGE = 100
 
-    def __init__(self, github_client: GitHubClient, repo: str):
+    def __init__(self, github_client: GitHubClient, repo: str, commit_repo: CommitRepository):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.http_client = github_client
         self.repo = repo
 
-        self.commit_repo = CommitRepository(repo)
+        self.commit_repo = commit_repo
         self.base_url = f'https://api.github.com/repos/{repo}'
 
     async def sync_commit_list(self, update: bool = False, batch_size: int = 500):

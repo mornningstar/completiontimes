@@ -1,14 +1,14 @@
+import asyncio
 import logging
 import os
 import threading
-import asyncio
 
 import pandas as pd
 
 from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
 from src.data_handling.features.feature_generator_registry import feature_generator_registry
 from src.pipeline.configs import ENGINEER_BY_TYPE, TRAINER_BY_TYPE
-from src.predictions.training.results.results import EvaluationMetrics
+from src.visualisations.model_plotting import ModelPlotter
 
 _csv_lock = threading.Lock()
 
@@ -117,7 +117,9 @@ class AblationStudy:
                 os.makedirs(ablation_images_dir, exist_ok=True)
                 os.makedirs(ablation_models_dir, exist_ok=True)
 
-                trainer = trainer_cls(self.project_name, model_cfg, ablation_images_dir, ablation_models_dir)
+                model_plotter = ModelPlotter(self.project_name, images_dir=ablation_images_dir)
+                trainer = trainer_cls(self.project_name, model_cfg,
+                                      model_plotter=model_plotter, output_dir=ablation_models_dir)
 
                 # 3. Train the model on the subset of features
                 data_to_pass = (ablation_df, ablation_categorical_cols)

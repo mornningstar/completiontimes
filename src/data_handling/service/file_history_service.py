@@ -11,14 +11,15 @@ from src.github.http_client import GitHubClient
 class FileHistoryService:
     RESULTS_PER_PAGE = CommitSyncService.RESULTS_PER_PAGE
 
-    def __init__(self, github_client: GitHubClient, repo: str):
+    def __init__(self, github_client: GitHubClient, repo: str,
+                 file_repo: FileRepository, commit_service: CommitSyncService):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.http_client = github_client
         self.repo = repo
 
-        self.file_repo = FileRepository(self.repo)
+        self.file_repo = file_repo
         self.base_url = f'https://api.github.com/repos/{self.repo}'
-        self.commit_service = CommitSyncService(github_client, repo)
+        self.commit_service = commit_service
 
         self.visited_paths: set[str] = set()
         self.failed_requests = set() # cache requests for files with SHA that yield a 404

@@ -8,13 +8,13 @@ from src.github.token_bucket import TokenBucket
 
 
 class SyncOrchestrator:
-    def __init__(self, auth_token: str, repo: str, token_bucket: TokenBucket = None):
+    def __init__(self, repo: str,
+                 http_client: GitHubClient, commit_service: CommitSyncService, file_service: FileHistoryService):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.http_client = GitHubClient(auth_token, token_bucket)
-
+        self.http_client = http_client
         self.repo = repo
-        self.commit_service = CommitSyncService(self.http_client, repo)
-        self.file_service = FileHistoryService(self.http_client, repo)
+        self.commit_service = commit_service
+        self.file_service = file_service
 
     async def run(self):
         await self.http_client.open()

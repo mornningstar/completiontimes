@@ -5,6 +5,12 @@ import os
 import platform
 
 from dotenv import load_dotenv
+
+from src.data_handling.database.commit_repo import CommitRepository
+from src.data_handling.service.commit_sync_service import CommitSyncService
+from src.data_handling.service.file_history_service import FileHistoryService
+from src.github.http_client import GitHubClient
+
 load_dotenv(dotenv_path='../config/.env')
 
 import pandas as pd
@@ -40,7 +46,13 @@ async def run_data_fetching(project, token_bucket: TokenBucket = None):
     auth_token = os.path.expandvars(config['github']['token'])
 
     if get_newest:
-        orchestrator = SyncOrchestrator(auth_token, project_name, token_bucket)
+        http_client = GitHubClient(auth_token, token_bucket)
+        commit_repo = CommitRepository(project_name)
+        file_repo = FileRepository(project_name)
+        commit_service = CommitSyncService(http_client, project_name, commit_repo)
+        file_service = FileHistoryService(http_client, project_name, file_repo, commit_service)
+
+        orchestrator = SyncOrchestrator(project_name, http_client, commit_service, file_service)
         logging.info(f"Starting processing for project: {project_name}")
         await orchestrator.run()
         logging.debug("Finished calling synchronised orchestrator")

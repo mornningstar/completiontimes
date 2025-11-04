@@ -11,7 +11,7 @@ from src.visualisations.model_plotting import ModelPlotter
 
 
 class RegressionModelTrainer:
-    def __init__(self, project_name, model_cfg, images_dir, output_dir="models"):
+    def __init__(self, project_name, model_cfg, model_plotter: ModelPlotter, output_dir="models"):
         self.project_name = project_name
         model_cls = model_cfg["class"]
         self.model = model_cls(auto_tune=True)
@@ -19,7 +19,7 @@ class RegressionModelTrainer:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
-        self.model_plotter = ModelPlotter(project_name, images_dir=images_dir)
+        self.model_plotter = model_plotter
         self.logger = logging.getLogger(self.__class__.__name__)
         self.evaluator = ModelEvaluator(self.model, self.model_plotter, self.output_dir, self.logger)
 
@@ -121,7 +121,7 @@ class RegressionModelTrainer:
             "mae": round(metrics.mae, 4),
             "mae_std": round(metrics.mae_std, 4),
             "rmse": round(metrics.rmse, 4),
-            "smape: round(metrics.smape, 4,"
+            "mdae": round(metrics.mdae, 4),
             "model_path": model_path,
         }
         

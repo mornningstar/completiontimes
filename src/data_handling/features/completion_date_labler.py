@@ -10,13 +10,12 @@ class CompletionDateLabler:
         self.logging = logging.getLogger(self.__class__.__name__)
         self.now = pd.Timestamp.utcnow().normalize().tz_localize(None)
 
-    def add_days_until_completion(self, df):
+    def add_days_until_completion(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
+
         df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
         df["completion_date"] = pd.to_datetime(df["completion_date"], errors="coerce").dt.tz_localize(None)
-        df.loc[df["completion_date"].notnull(), "completion_date"] = (
-            df.loc[df["completion_date"].notnull(), "completion_date"].dt.tz_localize(None)
-        )
+
         df["days_until_completion"] = (
                 df["completion_date"] - df["date"]
         ).dt.days
