@@ -3,8 +3,9 @@ import logging
 import joblib
 from sklearn.preprocessing import RobustScaler
 
-
 class BaseModel:
+    CPU_LIMIT = int(36)
+
     def __init__(self):
         self.model = None
         self.scaler = RobustScaler()

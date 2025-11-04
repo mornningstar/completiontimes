@@ -8,8 +8,6 @@ from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 
-from config import globals
-
 from src.predictions.base_model import BaseModel
 
 
@@ -54,7 +52,7 @@ class GradientBoosting(BaseModel):
 
             model = GradientBoostingRegressor(random_state=42, **param_grid)
             scores = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter,
-                                     scoring=scoring, n_jobs=(globals.CPU_LIMIT // 8))
+                                     scoring=scoring, n_jobs=(self.CPU_LIMIT // 8))
             return scores.mean()
 
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')

@@ -6,6 +6,11 @@ from config import globals
 
 
 class CompletionDateLabler:
+    STABILITY_MIN_COMMITS = 3
+    STABILITY_MIN_DAYS = 14
+    STABILITY_IDLE_DAYS = 30
+    STABILITY_PERCENTAGE_CHANGE = 0.15
+
     def __init__(self):
         self.logging = logging.getLogger(self.__class__.__name__)
         self.now = pd.Timestamp.utcnow().normalize().tz_localize(None)
@@ -84,11 +89,11 @@ class CompletionDateLabler:
 
     def _check_stable_line_change_window(self, group):
         group = group.sort_values("date").reset_index(drop=True)
-        min_commits, min_days, confirm_idle_days = (globals.STABILITY_MIN_COMMITS, globals.STABILITY_MIN_DAYS,
-                                                    globals.STABILITY_MIN_DAYS)
+        min_commits, min_days, confirm_idle_days = (self.STABILITY_MIN_COMMITS, self.STABILITY_MIN_DAYS,
+                                                    self.STABILITY_MIN_DAYS)
         now = pd.Timestamp.now().normalize()
         median_change = group["line_change"].median()
-        threshold = max(3, median_change * globals.STABILITY_PERCENTAGE_CHANGE)
+        threshold = max(3, median_change * self.STABILITY_PERCENTAGE_CHANGE)
 
         if group.iloc[-1]["line_change"] > threshold:
             return None, None

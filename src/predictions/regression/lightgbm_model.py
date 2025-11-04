@@ -1,17 +1,14 @@
 import pprint
 import time
 
-import lightgbm
 import numpy as np
 import optuna
 from lightgbm import LGBMRegressor
 from mlxtend.evaluate import GroupTimeSeriesSplit
 from optuna.samplers import TPESampler
-from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
 from src.predictions.base_model import BaseModel
-from config import globals
 
 
 class LightGBMModel(BaseModel):
@@ -57,7 +54,7 @@ class LightGBMModel(BaseModel):
 
             model = LGBMRegressor(**trial_params, verbose=-1)
             scores = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter,
-                            scoring=scoring, n_jobs=(globals.CPU_LIMIT // 8))
+                            scoring=scoring, n_jobs=(self.CPU_LIMIT // 8))
             return scores.mean()
 
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize',
@@ -66,7 +63,7 @@ class LightGBMModel(BaseModel):
         study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=8)
         elapsed_time = time.time() - start_time
 
-        final_params = {**study.best_params, 'random_state': 42, 'n_jobs': globals.CPU_LIMIT // 8}
+        final_params = {**study.best_params, 'random_state': 42, 'n_jobs': self.CPU_LIMIT // 8}
 
         self.model = LGBMRegressor(**final_params)
         self.logger.info(f"Best score: {study.best_value:.4f}")
