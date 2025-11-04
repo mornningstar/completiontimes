@@ -49,7 +49,7 @@ class ModelEvaluator:
         errors_df = pd.merge(result_df, feature_df, on=["path", "date"])
 
         eval_path = EvaluationPath(evaluation_path=eval_csv_path)
-        return y_pred, errors_df, metrics, eval_path
+        return y_pred, y_test, errors_df, metrics, eval_path
 
     def analyze_performance_by_age(self, errors_df):
         if 'age_in_days' not in errors_df.columns:
@@ -71,14 +71,20 @@ class ModelEvaluator:
         return age_analysis
 
     @staticmethod
-    def perform_error_analysis(errors_df, feature_cols, categorical_cols, model, model_plotter, output_dir, logger,
+    def _bin_errors(errors_df):
+        errors_df["true_bin"] = pd.cut(errors_df["actual"], bins=[0, 30, 90, 180, 365, 1000],
+                                       labels=["<30", "30–90", "90–180", "180–365", "365+"])
+
+        return errors_df
+
+
+    def perform_error_analysis(self, errors_df, feature_cols, categorical_cols, model, model_plotter, output_dir, logger,
                                threshold: float = 30.0):
         errors_df["error_type"] = "ok"
         errors_df.loc[errors_df["residual"] > threshold, "error_type"] = "underestimated"
         errors_df.loc[errors_df["residual"] < -threshold, "error_type"] = "overestimated"
 
-        errors_df["true_bin"] = pd.cut(errors_df["actual"], bins=[0, 30, 90, 180, 365, 1000],
-                                       labels=["<30", "30–90", "90–180", "180–365", "365+"])
+        errors_df = ModelEvaluator._bin_errors(errors_df)
 
         error_counts = errors_df["error_type"].value_counts()
         logger.info("Error types:\n{}".format(error_counts))
@@ -90,14 +96,8 @@ class ModelEvaluator:
         explain.analyze_best_predictions(errors_df, top_n=3)
 
         stats_dfs = explain.analyze_error_sources(errors_df)
-        stats_by_bins, stats_by_ext, stats_by_dir, stats_by_reason, stats_by_committer = stats_dfs
 
-        stats_by_bins.to_csv(os.path.join(output_dir, "error_stats_by_actual_bin.csv"))
-        stats_by_ext.to_csv(os.path.join(output_dir, "error_stats_by_extension.csv"))
-        stats_by_dir.to_csv(os.path.join(output_dir, "error_stats_by_directory.csv"))
-        stats_by_reason.to_csv(os.path.join(output_dir, "error_stats_by_reason.csv"))
-        if stats_by_committer is not None:
-            stats_by_committer.to_csv(os.path.join(output_dir, "error_stats_by_committer.csv"))
+        self._save_stats_to_csv(output_dir, stats_dfs)
 
         explain.analyze_shap_by_committer(errors_df)
 
@@ -112,3 +112,12 @@ class ModelEvaluator:
         errors_df.to_csv(error_csv, index=False)
 
         return ErrorAnalysisPath(error_analysis_path=error_csv)
+
+    def _save_stats_to_csv(self, output_dir, stats_df):
+        stats_by_bins, stats_by_ext, stats_by_dir, stats_by_reason, stats_by_committer = stats_df
+        stats_by_bins.to_csv(os.path.join(output_dir, "error_stats_by_actual_bin.csv"))
+        stats_by_ext.to_csv(os.path.join(output_dir, "error_stats_by_extension.csv"))
+        stats_by_dir.to_csv(os.path.join(output_dir, "error_stats_by_directory.csv"))
+        stats_by_reason.to_csv(os.path.join(output_dir, "error_stats_by_reason.csv"))
+        if stats_by_committer is not None:
+            stats_by_committer.to_csv(os.path.join(output_dir, "error_stats_by_committer.csv"))

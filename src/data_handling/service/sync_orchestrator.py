@@ -1,10 +1,8 @@
 import logging
 
-from src.data_handling.database.async_database import AsyncDatabase
 from src.data_handling.service.commit_sync_service import CommitSyncService
 from src.data_handling.service.file_history_service import FileHistoryService
 from src.github.http_client import GitHubClient
-from src.github.token_bucket import TokenBucket
 
 
 class SyncOrchestrator:

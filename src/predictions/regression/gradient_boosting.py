@@ -20,7 +20,7 @@ class GradientBoosting(BaseModel):
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials = 100,
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_absolute_error', n_trials = 100,
                   timeout = None, split_strategy='by_file'):
         self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
@@ -38,7 +38,7 @@ class GradientBoosting(BaseModel):
 
         def objective(trial):
             param_grid = {
-                "loss": "squared_error",
+                "loss": "absolute_error",
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
                 "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
                 "max_depth": trial.suggest_int("max_depth", 3, 10),

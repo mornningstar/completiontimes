@@ -1,18 +1,17 @@
+import gc
 import logging
 import os
-import gc
-import cupy as cp
 from collections import defaultdict
 
+import cupy as cp
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 from cupyx.scipy.sparse import csr_matrix as cupy_csr_matrix
 from scipy.sparse import csr_matrix
+from sklearn.preprocessing import StandardScaler
 
 from src.data_handling.clustering.cluster_analyser import ClusterAnalyser
 from src.visualisations.cluster_plotting import ClusterPlotter
-from src.visualisations.plotting import Plotter
 
 
 def categorise(value, low_threshold=25, high_threshold=75):

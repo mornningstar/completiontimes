@@ -8,8 +8,6 @@ from lifelines import KaplanMeierFitter
 from matplotlib import pyplot as plt
 from sklearn.model_selection import learning_curve
 
-from config import globals
-
 from src.visualisations.plotting import Plotter
 
 

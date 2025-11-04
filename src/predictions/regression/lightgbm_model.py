@@ -17,7 +17,7 @@ class LightGBMModel(BaseModel):
         self.model = None
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5, scoring='neg_mean_squared_error',
+    def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5, scoring='neg_mean_absolute_error',
                   timeout=None, split_strategy='by_file'):
         self.logger.info(f"Starting LightGBM hyperparameter tuning with '{split_strategy}' strategy...")
 
@@ -35,8 +35,8 @@ class LightGBMModel(BaseModel):
 
         def objective(trial):
             trial_params = {
-                'objective': 'regression',
-                'metric': 'mse',
+                'objective': 'regression_l1',
+                'metric': 'mae',
                 'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
                 'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
                 'num_leaves': trial.suggest_int('num_leaves', 31, 256),

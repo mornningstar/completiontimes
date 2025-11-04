@@ -1,5 +1,4 @@
 import pandas as pd
-from config import globals
 
 from src.data_handling.features.feature_generator_registry import feature_generator_registry
 from src.data_handling.features.generators.abstract_feature_generator import AbstractFeatureGenerator

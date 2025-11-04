@@ -44,6 +44,9 @@ class RegressionModelTrainer:
         else:
             raise ValueError(f"Unknown split_strategy: {self.split_strategy}")
 
+        train_df = train_df.reset_index(drop=True)
+        test_df = test_df.reset_index(drop=True)
+
         # Calculate and save dataset statistics
         train_files = train_df['path'].nunique()
         test_files = test_df['path'].nunique()
@@ -103,12 +106,12 @@ class RegressionModelTrainer:
             if importances is not None:
                 self.model_plotter.plot_model_feature_importance(final_feature_cols, importances)
 
-        #Evaluation
-        y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, final_feature_cols)
+        y_pred, y_test, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log,
+                                                                                test_df, final_feature_cols)
 
-        self.model_plotter.plot_residuals(y_test_log, y_pred)
-        self.model_plotter.plot_errors_vs_actual(y_test_log, y_pred)
-        self.model_plotter.plot_predictions_vs_actual(y_test_log, y_pred)
+        self.model_plotter.plot_residuals(y_test, y_pred)
+        self.model_plotter.plot_errors_vs_actual(y_test, y_pred)
+        self.model_plotter.plot_predictions_vs_actual(y_test, y_pred)
         self.model_plotter.plot_top_errors(errors_df, n=10)
 
         error_path = self.evaluator.perform_error_analysis(errors_df, final_feature_cols, categorical_cols, self.model,
@@ -116,7 +119,12 @@ class RegressionModelTrainer:
 
         self.logger.info(f"Performing analysis of performance vs. file age for '{self.split_strategy}' split...")
         age_analysis = self.evaluator.analyze_performance_by_age(errors_df)
-        self.model_plotter.plot_mae_by_age(age_analysis)
+
+        if age_analysis is not None:
+            self.model_plotter.plot_mae_by_age(age_analysis)
+        else:
+            self.logger.warning(
+                "Skipping MAE vs. Age plot as age analysis data was not generated.")
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)

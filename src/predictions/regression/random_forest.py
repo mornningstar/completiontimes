@@ -15,7 +15,7 @@ class RandomForestModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=100,
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_absolute_error', n_trials=100,
                   timeout=None, split_strategy='by_file'):
         self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
@@ -33,11 +33,12 @@ class RandomForestModel(BaseModel):
 
         def objective(trial):
             params = {
-                'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
-                'max_depth': trial.suggest_int('max_depth', 5, 30, step=5),
+                'criterion': 'absolute_error',
+                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
+                'max_depth': trial.suggest_int('max_depth', 5, 25, step=5),
                 'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
                 'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 10),
-                'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5, None]),
+                'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5, 0.75]),
                 'bootstrap': trial.suggest_categorical('bootstrap', [True, False]),
                 'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.2),
                 'n_jobs': 1

@@ -15,7 +15,7 @@ class XGBoostModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
-    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_squared_error', n_trials=100, timeout=None,
+    def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_absolute_error', n_trials=100, timeout=None,
                   split_strategy='by_file'):
         self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
@@ -33,8 +33,8 @@ class XGBoostModel(BaseModel):
 
         def objective(trial):
             params = {
-                'objective': 'reg:squarederror',
-                'eval_metric': 'rmse',
+                'objective': 'reg:absoluteerror',
+                'eval_metric': 'mae',
                 'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
                 'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
                 'max_depth': trial.suggest_int('max_depth', 3, 10),
