@@ -11,17 +11,19 @@ from src.visualisations.model_plotting import ModelPlotter
 
 
 class RegressionModelTrainer:
-    def __init__(self, project_name, model_cfg, model_plotter: ModelPlotter, output_dir="models"):
+    def __init__(self, project_name, model_cfg, model_plotter: ModelPlotter,
+                 evaluator: ModelEvaluator, output_dir="models"):
         self.project_name = project_name
-        model_cls = model_cfg["class"]
-        self.model = model_cls(auto_tune=True)
+
         self.split_strategy = model_cfg.get("split_strategy", "by_file")
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
+        self.model = evaluator.model
+
         self.model_plotter = model_plotter
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.evaluator = ModelEvaluator(self.model, self.model_plotter, self.output_dir, self.logger)
+        self.evaluator = evaluator
 
     @staticmethod
     def get_feature_cols(file_data_df, include_size=False):
@@ -103,11 +105,18 @@ class RegressionModelTrainer:
 
         #Evaluation
         y_pred, errors_df, metrics, eval_path = self.evaluator.evaluate(x_test, y_test_log, test_df, final_feature_cols)
+
+        self.model_plotter.plot_residuals(y_test_log, y_pred)
+        self.model_plotter.plot_errors_vs_actual(y_test_log, y_pred)
+        self.model_plotter.plot_predictions_vs_actual(y_test_log, y_pred)
+        self.model_plotter.plot_top_errors(errors_df, n=10)
+
         error_path = self.evaluator.perform_error_analysis(errors_df, final_feature_cols, categorical_cols, self.model,
                                                            self.model_plotter, self.output_dir, self.logger)
 
         self.logger.info(f"Performing analysis of performance vs. file age for '{self.split_strategy}' split...")
-        self.evaluator.analyze_performance_by_age(errors_df)
+        age_analysis = self.evaluator.analyze_performance_by_age(errors_df)
+        self.model_plotter.plot_mae_by_age(age_analysis)
 
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)

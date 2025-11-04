@@ -13,7 +13,6 @@ from src.github.http_client import GitHubClient
 
 load_dotenv(dotenv_path='../config/.env')
 
-import pandas as pd
 import yaml
 
 from src.data_handling.database.async_database import AsyncDatabase

@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.data_handling.features.feature_engineer_runner import FeatureEngineerRunner
 from src.data_handling.features.feature_generator_registry import feature_generator_registry
+from src.factories.trainer_factory import TrainerFactory
 from src.pipeline.configs import ENGINEER_BY_TYPE, TRAINER_BY_TYPE
 from src.visualisations.model_plotting import ModelPlotter
 
@@ -24,6 +25,7 @@ class AblationStudy:
         self.timestamp = timestamp
         self.master_results_path = master_results_path
         self._features_cache = {}
+        self.factory = TrainerFactory()
 
     async def _get_or_create_features(self, model_cfg):
         """
@@ -109,19 +111,14 @@ class AblationStudy:
 
                 ablation_categorical_cols = [col for col in all_categorical_cols if col in ablation_df.columns]
 
-                trainer_cls = TRAINER_BY_TYPE[feature_type]
+                trainer = self.factory.create_trainer(
+                    project_name=self.project_name,
+                    model_cfg=model_cfg,
+                    images_dir=self.images_dir,
+                    models_dir=self.models_dir,
+                    ablation_name=ablation["name"]
+                )
 
-                ablation_images_dir = os.path.join(self.images_dir, model_name, data_split, ablation["name"])
-                ablation_models_dir = os.path.join(self.models_dir, model_name, data_split, ablation["name"])
-
-                os.makedirs(ablation_images_dir, exist_ok=True)
-                os.makedirs(ablation_models_dir, exist_ok=True)
-
-                model_plotter = ModelPlotter(self.project_name, images_dir=ablation_images_dir)
-                trainer = trainer_cls(self.project_name, model_cfg,
-                                      model_plotter=model_plotter, output_dir=ablation_models_dir)
-
-                # 3. Train the model on the subset of features
                 data_to_pass = (ablation_df, ablation_categorical_cols)
                 training_result = await asyncio.to_thread(trainer.train_and_evaluate, data_to_pass)
 

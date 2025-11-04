@@ -9,25 +9,10 @@ from src.predictions.training.results.results import EvaluationMetrics, ErrorAna
 
 
 class ModelEvaluator:
-    def __init__(self, model, model_plotter, output_dir, logger):
+    def __init__(self, model, output_dir, logger):
         self.model = model
-        self.model_plotter = model_plotter
         self.output_dir = output_dir
         self.logger = logger
-
-    @staticmethod
-    def _calculate_smape(y_true, y_pred):
-        """
-        Calculates Symmetric Mean Absolute Percentage Error (sMAPE).
-        """
-        numerator = 2 * np.abs(y_true - y_pred)
-        denominator = np.abs(y_true) + np.abs(y_pred)
-        errors = numerator / denominator
-
-        # Handle the 0/0 case: if both true and pred are 0, error is 0
-        errors = np.nan_to_num(errors, nan=0.0)
-
-        return np.mean(errors)
 
     def evaluate(self, x_test, y_test, test_df, feature_cols):
         y_pred_log = self.model.evaluate(x_test, y_test)
@@ -63,11 +48,6 @@ class ModelEvaluator:
         feature_df = test_df[["path", "date"] + feature_cols + extra_cols]
         errors_df = pd.merge(result_df, feature_df, on=["path", "date"])
 
-        self.model_plotter.plot_residuals(y_test, y_pred)
-        self.model_plotter.plot_errors_vs_actual(y_test, y_pred)
-        self.model_plotter.plot_predictions_vs_actual(y_test, y_pred)
-        self.model_plotter.plot_top_errors(errors_df, n=10)
-
         eval_path = EvaluationPath(evaluation_path=eval_csv_path)
         return y_pred, errors_df, metrics, eval_path
 
@@ -87,7 +67,8 @@ class ModelEvaluator:
 
         self.logger.info("MAE by File Age:\n{}".format(age_analysis))
 
-        self.model_plotter.plot_mae_by_age(age_analysis)
+
+        return age_analysis
 
     @staticmethod
     def perform_error_analysis(errors_df, feature_cols, categorical_cols, model, model_plotter, output_dir, logger,
