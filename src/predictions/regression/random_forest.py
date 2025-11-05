@@ -41,7 +41,7 @@ class RandomForestModel(BaseModel):
                 'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', 0.3, 0.5, 0.75]),
                 'bootstrap': trial.suggest_categorical('bootstrap', [True, False]),
                 'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.2),
-                'n_jobs': 1
+                'n_jobs': self.CPU_LIMIT,
             }
 
             if params['bootstrap']:
@@ -50,13 +50,12 @@ class RandomForestModel(BaseModel):
                 params['max_samples'] = None
 
             model = RandomForestRegressor(random_state=42, **params)
-            score = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter, scoring=scoring,
-                                    n_jobs=(self.CPU_LIMIT // 8))
+            score = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter, scoring=scoring)
             return score.mean()
     
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')
         start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=8)
+        study.optimize(objective, n_trials=n_trials, timeout=timeout)#, n_jobs=8)
         elapsed_time = time.time() - start_time
 
         self.model = RandomForestRegressor(random_state=42, **study.best_params)

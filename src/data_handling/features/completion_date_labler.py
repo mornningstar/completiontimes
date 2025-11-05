@@ -90,7 +90,6 @@ class CompletionDateLabler:
         group = group.sort_values("date").reset_index(drop=True)
         min_commits, min_days, confirm_idle_days = (self.STABILITY_MIN_COMMITS, self.STABILITY_MIN_DAYS,
                                                     self.STABILITY_IDLE_DAYS)
-        now = pd.Timestamp.now().normalize()
         median_change = group["line_change"].median()
         threshold = max(3, median_change * self.STABILITY_PERCENTAGE_CHANGE)
 
@@ -116,7 +115,7 @@ class CompletionDateLabler:
             return None, None
 
         final_commit_date = stable_block["date"].iloc[-1]
-        if (now - final_commit_date).days < confirm_idle_days or group["size"].iloc[-1] == 0:
+        if (self.now - final_commit_date).days < confirm_idle_days or group["size"].iloc[-1] == 0:
             return None, None
 
         return final_commit_date, "stable_line_change"
