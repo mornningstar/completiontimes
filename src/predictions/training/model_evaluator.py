@@ -79,10 +79,12 @@ class ModelEvaluator:
 
 
     def perform_error_analysis(self, errors_df, feature_cols, categorical_cols, model, model_plotter, output_dir, logger,
-                               threshold: float = 30.0):
+                               threshold: float = 0.2):
+        errors_df["relative_error"] = errors_df["residual"] / (errors_df["actual"] + 1e-6)
+
         errors_df["error_type"] = "ok"
-        errors_df.loc[errors_df["residual"] > threshold, "error_type"] = "underestimated"
-        errors_df.loc[errors_df["residual"] < -threshold, "error_type"] = "overestimated"
+        errors_df.loc[errors_df["relative_error"] > threshold, "error_type"] = "underestimated"
+        errors_df.loc[errors_df["relative_error"] < -threshold, "error_type"] = "overestimated"
 
         errors_df = ModelEvaluator._bin_errors(errors_df)
 

@@ -33,7 +33,7 @@ class RandomForestModel(BaseModel):
 
         def objective(trial):
             params = {
-                'criterion': 'absolute_error',
+                'criterion': 'squared_error',
                 'n_estimators': trial.suggest_int('n_estimators', 50, 500),
                 'max_depth': trial.suggest_int('max_depth', 5, 25, step=5),
                 'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
@@ -55,7 +55,7 @@ class RandomForestModel(BaseModel):
     
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')
         start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout)#, n_jobs=8)
+        study.optimize(objective, n_trials=n_trials, timeout=timeout)
         elapsed_time = time.time() - start_time
 
         self.model = RandomForestRegressor(random_state=42, **study.best_params)

@@ -38,7 +38,7 @@ class GradientBoosting(BaseModel):
 
         def objective(trial):
             param_grid = {
-                "loss": "absolute_error",
+                "loss": "squared_error",
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
                 "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
                 "max_depth": trial.suggest_int("max_depth", 3, 10),
@@ -47,17 +47,16 @@ class GradientBoosting(BaseModel):
                 "max_features": trial.suggest_categorical("max_features", ["sqrt", "log2", 0.3, 0.5]),
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
                 'min_impurity_decrease': trial.suggest_float('min_impurity_decrease', 0.0, 0.2),
-                'n_jobs': 1
             }
 
             model = GradientBoostingRegressor(random_state=42, **param_grid)
             scores = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter,
-                                     scoring=scoring, n_jobs=(self.CPU_LIMIT // 8))
+                                     scoring=scoring, n_jobs=1)
             return scores.mean()
 
         study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')
         start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=8)
+        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=self.CPU_LIMIT)
         elapsed_time = time.time() - start_time
 
         self.model = GradientBoostingRegressor(random_state=42, **study.best_params)

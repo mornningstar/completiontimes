@@ -33,7 +33,7 @@ class XGBoostModel(BaseModel):
 
         def objective(trial):
             params = {
-                'objective': 'reg:absoluteerror',
+                'objective': 'reg:squarederror',
                 'eval_metric': 'mae',
                 'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
                 'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
@@ -49,12 +49,12 @@ class XGBoostModel(BaseModel):
             }
             model = xgboost.XGBRegressor(**params)
             score = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter, scoring=scoring,
-                                    n_jobs=(self.CPU_LIMIT // 8))
+                                    n_jobs=1)
             return score.mean()
 
         study = optuna.create_study(direction='maximize')
         start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=8)
+        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=self.CPU_LIMIT)
         elapsed_time = time.time() - start_time
 
         self.model = xgboost.XGBRegressor(random_state=42, **study.best_params)
