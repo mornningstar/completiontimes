@@ -28,4 +28,4 @@ class ModelTrainingPipeline:
             )
 
             trainer.train_and_evaluate(features_to_use)
-            trainer.predict_unlabeled_files(features_to_use, latest_only=True)
+            trainer.predict_unlabeled_files(features_to_use[0], latest_only=True)
