@@ -83,7 +83,8 @@ async def run_model_training(project):
         feature_pipeline = FeatureEngineeringPipeline(file_repo, plotter, source_directory)
 
         if not is_ablation_study:
-            training_pipe = ModelTrainingPipeline(project_name, models, feature_pipeline, images_dir, models_dir)
+            training_pipe = ModelTrainingPipeline(project_name, models, feature_pipeline, images_dir, models_dir,
+                                                  master_results_path)
             await training_pipe.run()
         else:
             ablation_study = AblationStudy(

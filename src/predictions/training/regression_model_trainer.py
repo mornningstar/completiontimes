@@ -129,27 +129,6 @@ class RegressionModelTrainer:
         model_path = os.path.join(self.output_dir, f"{self.model.__class__.__name__}.pkl")
         self.model.save_model(model_path)
 
-        results_csv_path = os.path.join(self.output_dir, "results.csv")
-        results_data = {
-            "project": self.project_name,
-            "model": self.model.__class__.__name__,
-            "split_strategy": self.split_strategy,
-            "mse": round(metrics.mse, 4),
-            "mae": round(metrics.mae, 4),
-            "mae_std": round(metrics.mae_std, 4),
-            "rmse": round(metrics.rmse, 4),
-            "mdae": round(metrics.mdae, 4),
-            "model_path": model_path,
-        }
-        
-        if os.path.exists(results_csv_path):
-            existing_df = pd.read_csv(results_csv_path)
-            results_df = pd.concat([existing_df, pd.DataFrame([results_data])], ignore_index=True)
-        else:
-            results_df = pd.DataFrame([results_data])
-
-        results_df.to_csv(results_csv_path, index=False)
-
         return TrainingResult(
             model=self.model,
             metrics=metrics,
