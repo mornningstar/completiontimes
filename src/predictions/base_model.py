@@ -4,7 +4,7 @@ import joblib
 from sklearn.preprocessing import RobustScaler
 
 class BaseModel:
-    CPU_LIMIT = int(36)
+    CPU_LIMIT = int(60)
 
     def __init__(self):
         self.model = None

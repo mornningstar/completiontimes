@@ -1,14 +1,13 @@
 import pprint
 import time
 
-import numpy as np
 import optuna
 from lightgbm import LGBMRegressor
-from mlxtend.evaluate import GroupTimeSeriesSplit
 from optuna.samplers import TPESampler
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from sklearn.model_selection import cross_val_score
 
 from src.predictions.base_model import BaseModel
+from src.predictions.model_tuner import ModelTuner
 
 
 class LightGBMModel(BaseModel):
@@ -17,21 +16,13 @@ class LightGBMModel(BaseModel):
         self.model = None
         self.auto_tune_flag = auto_tune
 
+        self.model_tuner = ModelTuner()
+
     def auto_tune(self, x_train, y_train, groups, n_trials = 100, cv = 5, scoring='neg_mean_absolute_error',
                   timeout=None, split_strategy='by_file'):
         self.logger.info(f"Starting LightGBM hyperparameter tuning with '{split_strategy}' strategy...")
 
-        if split_strategy == 'by_file':
-            unique_groups = np.unique(groups)
-            num_groups = len(unique_groups)
-            test_size = max(1, int(num_groups * 0.2))
-            splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
-            cv_groups = groups
-        elif split_strategy == 'by_history':
-            splitter = TimeSeriesSplit(n_splits=cv)
-            cv_groups = None
-        else:
-            raise ValueError(f"Unknown split_strategy: {split_strategy}")
+        splitter, cv_groups = self.model_tuner.get_splitter(split_strategy, groups, cv)
 
         def objective(trial):
             trial_params = {
@@ -57,26 +48,21 @@ class LightGBMModel(BaseModel):
                             scoring=scoring, n_jobs=(self.CPU_LIMIT // 8))
             return scores.mean()
 
-        study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize',
-                                    sampler=TPESampler(seed=42))
-        start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=8)
-        elapsed_time = time.time() - start_time
-
-        final_params = {**study.best_params, 'random_state': 42, 'n_jobs': self.CPU_LIMIT // 8}
-
+        best_params = self.model_tuner.tune(objective, scoring, n_trials, timeout)
+        final_params = {**best_params, 'random_state': 42, 'n_jobs': self.CPU_LIMIT // 8}
         self.model = LGBMRegressor(**final_params)
-        self.logger.info(f"Best score: {study.best_value:.4f}")
-        self.logger.info("Best parameters:\n" + pprint.pformat(study.best_params))
-        self.logger.info(f"Tuning finished in {elapsed_time:.2f} seconds")
 
-        return study.best_params
 
     def train(self, x_train, y_train, groups = None, split_strategy='by_file'):
         self.logger.info("LightGBM: Training model..")
         if self.auto_tune_flag:
+            if groups is None and split_strategy == 'by_file':
+                raise ValueError("Groups are required for auto_tuning.")
+
             self.logger.info("Tuning hyperparameters with Optuna...")
             self.auto_tune(x_train, y_train, groups, split_strategy=split_strategy)
+        else:
+            self.model = LGBMRegressor(random_state=42)
 
         self.model.fit(x_train, y_train)
 

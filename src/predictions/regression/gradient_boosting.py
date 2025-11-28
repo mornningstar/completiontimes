@@ -9,6 +9,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 
 from src.predictions.base_model import BaseModel
+from src.predictions.model_tuner import ModelTuner
 
 
 class GradientBoosting(BaseModel):
@@ -17,6 +18,7 @@ class GradientBoosting(BaseModel):
 
         self.model = None
         self.auto_tune_flag = auto_tune
+        self.model_tuner = ModelTuner()
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -24,17 +26,7 @@ class GradientBoosting(BaseModel):
                   timeout = None, split_strategy='by_file'):
         self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
-        if split_strategy == 'by_file':
-            unique_groups = np.unique(groups)
-            num_groups = len(unique_groups)
-            test_size = max(1, int(num_groups * 0.2))
-            splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
-            cv_groups = groups
-        elif split_strategy == "by_history":
-            splitter = TimeSeriesSplit(n_splits=cv)
-            cv_groups = None
-        else:
-            raise ValueError(f"Unknown split_strategy: {split_strategy}")
+        splitter, cv_groups = self.model_tuner.get_splitter(split_strategy, groups, cv)
 
         def objective(trial):
             param_grid = {
@@ -54,19 +46,8 @@ class GradientBoosting(BaseModel):
                                      scoring=scoring, n_jobs=1)
             return scores.mean()
 
-        study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')
-        start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=self.CPU_LIMIT)
-        elapsed_time = time.time() - start_time
-
-        self.model = GradientBoostingRegressor(random_state=42, **study.best_params)
-        self.model.fit(x_train, y_train)
-
-        self.logger.info(f"Best score: {study.best_value:.4f} ({scoring})")
-        self.logger.info("Best parameters:\n" + pprint.pformat(study.best_params))
-        self.logger.info(f"Tuning finished in {elapsed_time:.2f} seconds")
-
-        return study.best_params
+        best_params = self.model_tuner.tune(objective, scoring, n_trials, timeout)
+        self.model = GradientBoostingRegressor(random_state=42, **best_params)
 
     def train(self, x_train, y_train, groups = None, split_strategy='by_file'):
         self.logger.info("Gradient Boosting: Training model..")
@@ -78,8 +59,8 @@ class GradientBoosting(BaseModel):
             self.auto_tune(x_train, y_train, groups=groups, split_strategy=split_strategy)
         else:
             self.model = GradientBoostingRegressor(random_state=42)
-            self.model.fit(x_train, y_train)
-            self.logger.info("Training completed.")
+
+        self.model.fit(x_train, y_train)
 
     def evaluate(self, x_test, y_test):
         self.logger.info("GradientBoosting - Evaluating model..")

@@ -17,7 +17,7 @@ def append_to_master_results(result_data: dict, master_results_path: str):
         desired_headers = [
             'project',
             'model',
-            'split_Strategy',
+            'split_strategy',
             'configuration',
             'timestamp',
             'metrics'
@@ -26,7 +26,7 @@ def append_to_master_results(result_data: dict, master_results_path: str):
         formatted_data = {
             'project': result_data.get('project'),
             'model': result_data.get('model'),
-            'split_Strategy': result_data.get('split_Strategy'),
+            'split_strategy': result_data.get('split_strategy'),
             'configuration': result_data.get('configuration'),
             'timestamp': result_data.get('timestamp'),
             'metrics': result_data.get('metrics')

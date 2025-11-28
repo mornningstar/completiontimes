@@ -8,6 +8,7 @@ from mlxtend.evaluate import GroupTimeSeriesSplit
 from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 
 from src.predictions.base_model import BaseModel
+from src.predictions.model_tuner import ModelTuner
 
 
 class XGBoostModel(BaseModel):
@@ -15,21 +16,13 @@ class XGBoostModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
+        self.model_tuner = ModelTuner()
+
     def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_absolute_error', n_trials=100, timeout=None,
                   split_strategy='by_file'):
         self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
-        if split_strategy == 'by_file':
-            unique_groups = np.unique(groups)
-            num_groups = len(unique_groups)
-            test_size = max(1, int(num_groups * 0.2))
-            splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
-            cv_groups = groups
-        elif split_strategy == "by_history":
-            splitter = TimeSeriesSplit(n_splits=cv)
-            cv_groups = None
-        else:
-            raise ValueError(f"Unknown split_strategy: {split_strategy}")
+        splitter, cv_groups = self.model_tuner.get_splitter(split_strategy, groups, cv)
 
         def objective(trial):
             params = {
@@ -52,17 +45,8 @@ class XGBoostModel(BaseModel):
                                     n_jobs=1)
             return score.mean()
 
-        study = optuna.create_study(direction='maximize')
-        start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, n_jobs=self.CPU_LIMIT)
-        elapsed_time = time.time() - start_time
-
-        self.model = xgboost.XGBRegressor(random_state=42, **study.best_params)
-        self.model.fit(x_train, y_train)
-
-        self.logger.info(f"Best score: {study.best_value:.4f} ({scoring})")
-        self.logger.info("Best parameters:\n" + pprint.pformat(study.best_params))
-        self.logger.info(f"Tuning finished in {elapsed_time:.2f} seconds")
+        best_params = self.model_tuner.tune(objective, scoring, n_trials, timeout)
+        self.model = xgboost.XGBRegressor(random_state=42, **best_params)
 
     def train(self, x_train, y_train, groups=None, split_strategy='by_file'):
         self.logger.info("XGBoost: Training model..")
@@ -74,8 +58,8 @@ class XGBoostModel(BaseModel):
             self.auto_tune(x_train, y_train, groups=groups, split_strategy=split_strategy)
         else:
             self.model = xgboost.XGBRegressor(random_state=42)
-            self.model.fit(x_train, y_train)
-            self.logger.info("XGBoost: Training completed.")
+
+        self.model.fit(x_train, y_train)
 
     def evaluate(self, x_test, y_test, **kwargs):
         self.logger.info("XGBoost: Evaluating model...")

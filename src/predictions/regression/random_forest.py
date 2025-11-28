@@ -8,6 +8,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 
 from src.predictions.base_model import BaseModel
+from src.predictions.model_tuner import ModelTuner
 
 
 class RandomForestModel(BaseModel):
@@ -15,21 +16,13 @@ class RandomForestModel(BaseModel):
         super().__init__()
         self.auto_tune_flag = auto_tune
 
+        self.model_tuner = ModelTuner()
+
     def auto_tune(self, x_train, y_train, groups, cv=5, scoring='neg_mean_absolute_error', n_trials=100,
                   timeout=None, split_strategy='by_file'):
         self.logger.info(f"Starting hyperparameter tuning with '{split_strategy}' strategy...")
 
-        if split_strategy == 'by_file':
-            unique_groups = np.unique(groups)
-            num_groups = len(unique_groups)
-            test_size = max(1, int(num_groups * 0.2))
-            splitter = GroupTimeSeriesSplit(test_size=test_size, n_splits=cv)
-            cv_groups = groups
-        elif split_strategy == "by_history":
-            splitter = TimeSeriesSplit(n_splits=cv)
-            cv_groups = None
-        else:
-            raise ValueError(f"Unknown split_strategy: {split_strategy}")
+        splitter, cv_groups = self.model_tuner.get_splitter(split_strategy, groups, cv)
 
         def objective(trial):
             params = {
@@ -52,20 +45,9 @@ class RandomForestModel(BaseModel):
             model = RandomForestRegressor(random_state=42, **params)
             score = cross_val_score(model, x_train, y_train, groups=cv_groups, cv=splitter, scoring=scoring)
             return score.mean()
-    
-        study = optuna.create_study(direction='maximize' if scoring.startswith("neg_") else 'minimize')
-        start_time = time.time()
-        study.optimize(objective, n_trials=n_trials, timeout=timeout)
-        elapsed_time = time.time() - start_time
 
-        self.model = RandomForestRegressor(random_state=42, **study.best_params)
-        self.model.fit(x_train, y_train)
-
-        self.logger.info(f"Best score: {study.best_value:.4f} ({scoring})")
-        self.logger.info("Best parameters:\n" + pprint.pformat(study.best_params))
-        self.logger.info(f"Tuning finished in {elapsed_time:.2f} seconds")
-
-        return study.best_params
+        best_params = self.model_tuner.tune(objective, scoring, n_trials, timeout)
+        self.model = RandomForestRegressor(random_state=42, **best_params)
 
     def train(self, x_train, y_train, groups=None, split_strategy='by_file'):
         self.logger.info("RandomForest: Training model..")
@@ -76,9 +58,10 @@ class RandomForestModel(BaseModel):
             self.logger.info("Tuning hyperparameters with Optuna...")
             self.auto_tune(x_train, y_train, groups=groups, split_strategy=split_strategy)
         else:
-            self.model = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)
-            self.model.fit(x_train, y_train)
+            self.model = RandomForestRegressor(random_state=42)
             self.logger.info("Training completed.")
+
+        self.model.fit(x_train, y_train)
 
     def evaluate(self, x_test, y_test, **kwargs):
         self.logger.info("Evaluating model...")
