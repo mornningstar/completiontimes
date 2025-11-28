@@ -22,11 +22,12 @@ def log_backoff_success(details):
 
 class GitHubClient:
     """ Wrapper around aiohttp to be able to talk to the GitHub API. """
-    GLOBAL_CONCURRENCY = asyncio.Semaphore(100)
 
-    def __init__(self, auth_token: str, token_bucket: TokenBucket = None):
+    def __init__(self, auth_token: str, token_bucket: TokenBucket = None, concurrency: int = 100, timeout: int = 300):
         self.auth_token = auth_token
-        self.semaphore = self.GLOBAL_CONCURRENCY
+        self.semaphore = asyncio.Semaphore(concurrency)
+        self.timeout = timeout
+        self.max_retires = max_retries
         self._session = None
         self._headers = {
             "Authorization": f"token {auth_token}",
@@ -38,7 +39,7 @@ class GitHubClient:
         self.logger = logging.getLogger(self.__class__.__name__)
 
     async def open(self):
-        timeout = ClientTimeout(total=300,      # entire request must finish in 5 mins
+        timeout = ClientTimeout(total=self.timeout,      # entire request must finish in 5 mins
                                 sock_read=60)   # 1 minute allowance to read response body
         self._session = ClientSession(timeout=timeout)
 

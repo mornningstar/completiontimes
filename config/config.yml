@@ -1,36 +1,49 @@
 github:
   token: '$GITHUB_TOKEN'
+  rate_limit:
+    capacity: 900
+    window_seconds: 60
+  client:
+    concurrency: 100
+    timeout_seconds: 300
 
 mongo:
     uri: "mongodb://localhost:27018"
     database: "github_data"
 
+targets:
+  stability_min_commits: 3
+  stability_min_days: 14
+  stability_idle_days: 30
+  stability_percentage_change: 0.15
+  project_inactivity_cutoff_percentile: 0.95
+
 projects:
-#  - name: 'flairNLP/fundus'
-#    source_directory: 'src/fundus'
-#    get_newest: False
-#    ablation: False
-#    models:
-#      - class: LinearRegressionModel
-#        feature_type: regression
-#        split_strategy: by_file
-#      - class: LinearRegressionModel
-#        feature_type: regression
-#        split_strategy: by_history
-#
-#      - class: MedianBaseModel
-#        feature_type: regression
-#        split_strategy: by_file
-#      - class: MedianBaseModel
-#        feature_type: regression
-#        split_strategy: by_history
-#
-#      - class: RandomForestModel
-#        feature_type: regression
-#        split_strategy: by_file
-#      - class: RandomForestModel
-#        feature_type: regression
-#        split_strategy: by_history
+  - name: 'flairNLP/fundus'
+    source_directory: 'src/fundus'
+    get_newest: False
+    ablation: False
+    models:
+      - class: LinearRegressionModel
+        feature_type: regression
+        split_strategy: by_file
+      - class: LinearRegressionModel
+        feature_type: regression
+        split_strategy: by_history
+
+      - class: MedianBaseModel
+        feature_type: regression
+        split_strategy: by_file
+      - class: MedianBaseModel
+        feature_type: regression
+        split_strategy: by_history
+
+      - class: RandomForestModel
+        feature_type: regression
+        split_strategy: by_file
+      - class: RandomForestModel
+        feature_type: regression
+        split_strategy: by_history
 #
 #      - class: GradientBoosting
 #        feature_type: regression
@@ -334,12 +347,12 @@ projects:
 #      - class: XGBoostModel
 #        feature_type: regression
 #        split_strategy: by_history
-
-  - name: 'tabler/tabler'
-    source_directory: ''
-    get_newest: False
-    ablation: False
-    models:
+#
+#  - name: 'tabler/tabler'
+#    source_directory: ''
+#    get_newest: False
+#    ablation: False
+#    models:
 #      - class: LinearRegressionModel
 #        feature_type: regression
 #        split_strategy: by_file
@@ -364,9 +377,9 @@ projects:
 #      - class: RandomForestModel
 #        feature_type: regression
 #        split_strategy: by_file
-      - class: RandomForestModel
-        feature_type: regression
-        split_strategy: by_history
+#      - class: RandomForestModel
+#        feature_type: regression
+#        split_strategy: by_history
 #
 #      - class: GradientBoosting
 #        feature_type: regression

@@ -5,10 +5,10 @@ from collections import deque
 
 
 class TokenBucket:
-    def __init__(self):
-        self.capacity = 900 # max. 900 points
-        self.window = 60 # per 60 seconds
-        self.timestamps: deque[float] = deque() # keep time of last N acquisitions
+    def __init__(self, capacity: int = 900, window: int = 60):
+        self.capacity = capacity
+        self.window = window
+        self.timestamps: deque[float] = deque()
         self._lock = asyncio.Lock()
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -16,7 +16,6 @@ class TokenBucket:
     async def acquire(self):
         async with self._lock:
             now = time.time()
-            # drop tokens that slid out of the window
             while self.timestamps and now - self.timestamps[0] > self.window:
                 self.timestamps.popleft()
             

@@ -10,9 +10,15 @@ class CompletionDateLabler:
     STABILITY_IDLE_DAYS = 30
     STABILITY_PERCENTAGE_CHANGE = 0.15
 
-    def __init__(self):
+    def __init__(self, config: dict = None):
         self.logging = logging.getLogger(self.__class__.__name__)
         self.now = pd.Timestamp.utcnow().normalize().tz_localize(None)
+
+        self.min_commits = config.get('stability_min_commits', 3)
+        self.min_days = config.get('stability_min_days', 14)
+        self.idle_days = config.get('stability_idle_days', 30)
+        self.percentage_change = config.get('stability_percentage_change', 0.15)
+        self.percentile_cutoff = config.get('project_inactivity_cutoff_percentile', 0.95)
 
     def add_days_until_completion(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -42,7 +48,7 @@ class CompletionDateLabler:
         if "commit_interval_days" not in df.columns:
             raise ValueError("'commit_interval_days' must be calculated before calling this labler.")
 
-        project_cutoff = df["commit_interval_days"].replace(0, np.nan).dropna().quantile(0.95)
+        project_cutoff = df["commit_interval_days"].replace(0, np.nan).dropna().quantile(self.percentile_cutoff)
         project_cutoff = int(np.clip(project_cutoff, 30, 365))
         self.logging.info(f"Using project-wide inactivity cutoff of {project_cutoff} days")
 
@@ -88,10 +94,8 @@ class CompletionDateLabler:
 
     def _check_stable_line_change_window(self, group):
         group = group.sort_values("date").reset_index(drop=True)
-        min_commits, min_days, confirm_idle_days = (self.STABILITY_MIN_COMMITS, self.STABILITY_MIN_DAYS,
-                                                    self.STABILITY_IDLE_DAYS)
         median_change = group["line_change"].median()
-        threshold = max(3, median_change * self.STABILITY_PERCENTAGE_CHANGE)
+        threshold = max(3, median_change * self.percentage_change)
 
         if group.iloc[-1]["line_change"] > threshold:
             return None, None
@@ -107,15 +111,15 @@ class CompletionDateLabler:
             return None, None
 
         stable_block = group.loc[sorted(stable_block_indices)]
-        if len(stable_block) < min_commits:
+        if len(stable_block) < self.min_commits:
             return None, None
 
         block_duration = (stable_block["date"].iloc[-1] - stable_block["date"].iloc[0]).days
-        if block_duration < min_days:
+        if block_duration < self.min_days:
             return None, None
 
         final_commit_date = stable_block["date"].iloc[-1]
-        if (self.now - final_commit_date).days < confirm_idle_days or group["size"].iloc[-1] == 0:
+        if (self.now - final_commit_date).days < self.idle_days or group["size"].iloc[-1] == 0:
             return None, None
 
         return final_commit_date, "stable_line_change"

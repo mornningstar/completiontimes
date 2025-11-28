@@ -12,7 +12,7 @@ from src.pipeline.results_writer import append_to_master_results
 
 class AblationStudy:
     def __init__(self, project_name, file_repo, plotter, images_dir, models_dir, source_directory, timestamp,
-                 master_results_path):
+                 master_results_path, labelling_config=None):
         self.project_name = project_name
         self.file_repo = file_repo
         self.plotter = plotter
@@ -23,6 +23,7 @@ class AblationStudy:
         self.master_results_path = master_results_path
         self._features_cache = {}
         self.factory = TrainerFactory()
+        self.labelling_config = labelling_config
 
     async def _get_or_create_features(self, model_cfg):
         """
@@ -35,7 +36,7 @@ class AblationStudy:
         cache_key = eng_cls
         if cache_key not in self._features_cache:
             logging.info(f"Cache missing for {cache_key}. Generating full feature set...")
-            engineer = eng_cls(self.file_repo, self.plotter)
+            engineer = eng_cls(self.file_repo, self.plotter, labelling_config=self.labelling_config)
             runner = FeatureEngineerRunner(engineer)
             engineered_df, categorical_cols = await runner.run(
                 source_directory=self.source_directory, include_sets=feature_generator_registry.get_all_names()
@@ -57,16 +58,13 @@ class AblationStudy:
             })
 
         for model_cfg in models:
-            # 1. Get the master feature dataframe for this model config
             master_df, all_categorical_cols = await self._get_or_create_features(model_cfg)
-            feature_type = model_cfg.get("feature_type", "regression")
             data_split = model_cfg.get("split_strategy", "by_file")
 
             for ablation in ablation_configs:
                 model_name = model_cfg['class'].__name__
                 logging.info(f"Running ablation study: {ablation['name']} for model: {model_name}")
 
-                # 2. Select the subset of features for this ablation run
                 columns_to_use = self._get_columns_for_ablation(master_df, ablation["include"])
                 ablation_df = master_df[columns_to_use]
 

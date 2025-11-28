@@ -33,6 +33,11 @@ setup_logging()
 
 with open("../config/config.yml", "r") as f:
     config = yaml.safe_load(f)
+    
+GITHUB_CFG = config.get('github', {})
+RATE_LIMIT_CFG = GITHUB_CFG.get('rate_limit', {})
+CLIENT_CFG = GITHUB_CFG.get('client', {})
+LABELLING_CFG = config.get('labelling', {})
 
 for project in config["projects"]:
     for model in project["models"]:
@@ -45,7 +50,11 @@ async def run_data_fetching(project, token_bucket: TokenBucket = None):
     auth_token = os.path.expandvars(config['github']['token'])
 
     if get_newest:
-        http_client = GitHubClient(auth_token, token_bucket)
+        http_client = GitHubClient(auth_token,
+                                   token_bucket,
+                                   concurrency=CLIENT_CFG.get('concurrency', 100),
+                                   timeout=CLIENT_CFG.get('timeout_seconds', 300))
+
         commit_repo = CommitRepository(project_name)
         file_repo = FileRepository(project_name)
         commit_service = CommitSyncService(http_client, project_name, commit_repo)
@@ -80,7 +89,10 @@ async def run_model_training(project):
         file_repo = FileRepository(project_name)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
 
-        feature_pipeline = FeatureEngineeringPipeline(file_repo, plotter, source_directory)
+        feature_pipeline = FeatureEngineeringPipeline(file_repo,
+                                                      plotter,
+                                                      source_directory,
+                                                      labelling_config=LABELLING_CFG)
 
         if not is_ablation_study:
             training_pipe = ModelTrainingPipeline(project_name, models, feature_pipeline, images_dir, models_dir,
