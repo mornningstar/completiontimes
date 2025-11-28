@@ -43,7 +43,7 @@ for project in config["projects"]:
     for model in project["models"]:
         model["class"] = get_model_class(model["class"])
 
-async def run_data_fetching(project, token_bucket: TokenBucket = None):
+async def run_data_fetching(project, db: AsyncDatabase, token_bucket: TokenBucket = None):
     project_name = project['name']
     get_newest = project.get('get_newest', True)
 
@@ -55,8 +55,8 @@ async def run_data_fetching(project, token_bucket: TokenBucket = None):
                                    concurrency=CLIENT_CFG.get('concurrency', 100),
                                    timeout=CLIENT_CFG.get('timeout_seconds', 300))
 
-        commit_repo = CommitRepository(project_name)
-        file_repo = FileRepository(project_name)
+        commit_repo = CommitRepository(project_name, db)
+        file_repo = FileRepository(project_name, db)
         commit_service = CommitSyncService(http_client, project_name, commit_repo)
         file_service = FileHistoryService(http_client, project_name, file_repo, commit_service)
 
@@ -67,7 +67,7 @@ async def run_data_fetching(project, token_bucket: TokenBucket = None):
     else:
         logging.info("Skipping fetch of new commit history")
 
-async def run_model_training(project):
+async def run_model_training(project, db: AsyncDatabase):
     project_name = project['name']
     models = project.get('models', [])
     source_directory = project.get('source_directory', "src")
@@ -86,7 +86,7 @@ async def run_model_training(project):
 
         master_results_path = os.path.join(run_output_dir, "results.csv")
 
-        file_repo = FileRepository(project_name)
+        file_repo = FileRepository(project_name, db)
         plotter = ModelPlotter(project_name, images_dir=images_dir)
 
         feature_pipeline = FeatureEngineeringPipeline(file_repo,
@@ -121,16 +121,13 @@ async def run_model_training(project):
 
 async def main():
     shared_token_bucket = TokenBucket()
+    db = AsyncDatabase(config['mongo']['uri'], config['mongo']['database'])
 
-    AsyncDatabase.URI = config['mongo']['uri']
-    AsyncDatabase.DATABASE_NAME = config['mongo']['database']
-    await AsyncDatabase.initialize()
-
-    tasks = [run_data_fetching(project, shared_token_bucket) for project in config["projects"]]
+    tasks = [run_data_fetching(project, db, shared_token_bucket) for project in config["projects"]]
     await asyncio.gather(*tasks)
 
     for project in config["projects"]:
-        await run_model_training(project)
+        await run_model_training(project, db)
 
 if __name__ == '__main__':
     asyncio.run(main())
