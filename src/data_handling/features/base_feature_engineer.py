@@ -8,6 +8,12 @@ from src.data_handling.features.completion_date_labler import CompletionDateLabl
 from src.data_handling.features.feature_generator_registry import feature_generator_registry
 from src.visualisations.model_plotting import ModelPlotter
 
+# CRITICAL, NOT TO BE REMOVED:
+from src.data_handling.features.generators.commit_history_feature_generator import CommitHistoryFeatureGenerator
+from src.data_handling.features.generators.file_path_feature_generator import FilePathFeatureGenerator
+from src.data_handling.features.generators.file_size_feature_generator import FileSizeFeatureGenerator
+from src.data_handling.features.generators.line_change_feature_generator import LineChangeFeatureGenerator
+from src.data_handling.features.generators.committer_feature_generator import CommitterFeatureGenerator
 
 class BaseFeatureEngineer:
 

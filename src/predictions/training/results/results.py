@@ -29,9 +29,3 @@ class ErrorAnalysisPath:
 class EvaluationPath:
     """ Container for evaluation paths. """
     evaluation_path: str
-
-@dataclass
-class SurvivalTrainingResult:
-    """ Container for survival training results. """
-    concordance: float
-    model_path: str

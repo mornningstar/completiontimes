@@ -34,9 +34,7 @@ dependencies:
 
   - matplotlib
   - seaborn
-  - lifelines
 
   - pip
   - pip:
-      - prophet
       - holidays==0.70

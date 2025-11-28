@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import shap
-from lifelines import KaplanMeierFitter
 from matplotlib import pyplot as plt
 from sklearn.model_selection import learning_curve
 
@@ -156,37 +155,6 @@ class ModelPlotter(Plotter):
         if title:
             plt.title(title)
         self.save_plot(filename)
-
-    def plot_risk_histogram(self, df, risk_col):
-        self._init_plot(title="Distribution of Predicted Risks", xlabel="Predicted risk (lower = longer survival)", 
-                        ylabel="Number of files")
-        plt.hist(df[risk_col], bins=30)
-        self.save_plot("survival_risk_hist.png")
-    
-    def plot_kaplan_meier_by_risk_group(self, df, risk_col, event_col, duration_col):
-        self._init_plot(title="Kaplan-Meier Survival by Predicted Risk Group",
-                        xlabel="Time (days)",
-                        ylabel="Survival probability")
-
-        kmf = KaplanMeierFitter()
-        df["risk_group"] = pd.qcut(df[risk_col], q=3, labels=["low", "medium", "high"])
-
-        for group in ["low", "medium", "high"]:
-            mask = df["risk_group"] == group
-            kmf.fit(df.loc[mask, duration_col], event_observed=df.loc[mask, event_col], label=group)
-            kmf.plot_survival_function(ci_show=False)
-
-        plt.legend(title="Predicted Risk Group")
-        plt.grid(True)
-        self.save_plot("km_by_risk_group.png")
-
-    def plot_calibration_curve(self, observed, predicted, horizon):
-        self._init_plot(title=f"Calibration at {horizon} days", xlabel="Predicted event probability",
-                        ylabel="Observed event rate")
-        plt.plot(predicted, observed, marker="o", label="Observed")
-        plt.plot([0, 1], [0, 1], "--", label="Ideal")
-        plt.legend()
-        self.save_plot("survival_calibration_curve.png")
 
     def plot_learning_curves(self, estimator, X, y, groups=None, cv=5):
         train_sizes, train_scores, validation_scores = learning_curve(
