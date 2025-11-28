@@ -2,6 +2,9 @@ import logging
 
 import pymongo
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import PyMongoError
+
+from src.data_handling.database.exceptions import DatabaseError
 
 
 class AsyncDatabase:
@@ -79,7 +82,5 @@ class AsyncDatabase:
             else:
                 logging.info(f"Deleted one document from collection '{collection}' with query: {query}")
             return {"deleted_count": result.deleted_count}
-        except Exception as e:
-            logging.error(
-                f"Error while deleting document from collection '{collection}' with query: {query}. Error: {e}")
-            return {"deleted_count": 0, "error": str(e)}
+        except PyMongoError as e:
+            raise DatabaseError(f"Delete failed in '{collection}' with query: {query}", e)
