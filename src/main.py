@@ -3,6 +3,7 @@ import datetime
 import logging
 import os
 import platform
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -31,8 +32,7 @@ if platform.system() == 'Windows':
 
 setup_logging()
 
-with open("../config/config.yml", "r") as f:
-    config = yaml.safe_load(f)
+config = yaml.safe_load(Path("../config/config.yml").read_text())
     
 GITHUB_CFG = config.get('github', {})
 RATE_LIMIT_CFG = GITHUB_CFG.get('rate_limit', {})
