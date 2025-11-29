@@ -30,18 +30,22 @@ def configure_event_loop():
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 def load_app_config():
-    base_dir = Path(__file__).parent
+    try:
+        base_dir = Path(__file__).parent
 
-    load_dotenv(dotenv_path=base_dir / "../config/.env")
-    config_path = base_dir / "../config/config.yml"
+        load_dotenv(dotenv_path=base_dir / "../config/.env")
+        config_path = base_dir / "../config/config.yml"
 
-    config = yaml.safe_load(config_path.read_text())
+        config = yaml.safe_load(config_path.read_text())
 
-    for project in config["projects"]:
-        for model in project["models"]:
-            model["class"] = get_model_class(model["class"])
+        for project in config["projects"]:
+            for model in project["models"]:
+                model["class"] = get_model_class(model["class"])
 
-    return config
+        return config
+    except FileNotFoundError:
+        logging.error(f"CRITICAL: Config file not found at {config_path}")
+        raise FileNotFoundError
 
 async def run_data_fetching(project, db: AsyncDatabase, config: dict, token_bucket: TokenBucket = None):
     project_name = project['name']
@@ -116,8 +120,9 @@ async def run_model_training(project, db: AsyncDatabase, config: dict):
             await ablation_study.run(models=models)
             logging.info(f"Ablation study for {project_name} complete. Results saved to {master_results_path}")
 
-    except Exception:
-        logging.exception('Error while processing project {}'.format(project_name))
+
+    except Exception as e:
+        logging.exception(f"Critical unexpected error processing {project_name}: {e}")
     finally:
         logging.info('Project {} finished!'.format(project_name))
 
