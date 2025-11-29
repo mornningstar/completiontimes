@@ -30,12 +30,10 @@ def configure_event_loop():
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 def load_app_config():
+    base_dir = Path(__file__).parent
+    config_path = base_dir / "../config/config.yml"
     try:
-        base_dir = Path(__file__).parent
-
         load_dotenv(dotenv_path=base_dir / "../config/.env")
-        config_path = base_dir / "../config/config.yml"
-
         config = yaml.safe_load(config_path.read_text())
 
         for project in config["projects"]:
@@ -45,7 +43,7 @@ def load_app_config():
         return config
     except FileNotFoundError:
         logging.error(f"CRITICAL: Config file not found at {config_path}")
-        raise FileNotFoundError
+        raise
 
 async def run_data_fetching(project, db: AsyncDatabase, config: dict, token_bucket: TokenBucket = None):
     project_name = project['name']
