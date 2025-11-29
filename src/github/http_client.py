@@ -23,7 +23,8 @@ def log_backoff_success(details):
 class GitHubClient:
     """ Wrapper around aiohttp to be able to talk to the GitHub API. """
 
-    def __init__(self, auth_token: str, token_bucket: TokenBucket = None, concurrency: int = 100, timeout: int = 300):
+    def __init__(self, auth_token: str, token_bucket: TokenBucket = None, concurrency: int = 100, timeout: int = 300,
+                 max_retries: int = 5):
         self.auth_token = auth_token
         self.semaphore = asyncio.Semaphore(concurrency)
         self.timeout = timeout

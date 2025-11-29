@@ -17,7 +17,9 @@ class CommitHistoryFeatureGenerator(AbstractFeatureGenerator):
             'std_commit_interval', 'avg_commit_interval', 'weekday', 'month', 'max_commit_interval_to_date'
         ] + [f'commits_last_{w}d' for w in self.windows] + [f'commits_ratio_{w}d' for w in self.windows]
 
-    def generate(self, df: pd.DataFrame, windows: list[int] = [7, 30], **kwargs) -> tuple[pd.DataFrame, list[str]]:
+    def generate(self, df: pd.DataFrame, windows=None, **kwargs) -> tuple[pd.DataFrame, list[str]]:
+        if windows is None:
+            windows = [7, 30]
         self.windows = windows
 
         def _calculate_commits_in_windows(group: pd.DataFrame) -> pd.DataFrame:
