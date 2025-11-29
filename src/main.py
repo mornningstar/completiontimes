@@ -12,8 +12,6 @@ from src.data_handling.service.commit_sync_service import CommitSyncService
 from src.data_handling.service.file_history_service import FileHistoryService
 from src.github.http_client import GitHubClient
 
-load_dotenv(dotenv_path='../config/.env')
-
 import yaml
 
 from src.data_handling.database.async_database import AsyncDatabase
@@ -27,33 +25,36 @@ from src.pipeline.pipeline_model_training import ModelTrainingPipeline
 from src.predictions.registry import get_model_class
 from src.visualisations.model_plotting import ModelPlotter
 
-if platform.system() == 'Windows':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+def configure_event_loop():
+    if platform.system() == 'Windows':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-setup_logging()
+def load_app_config():
+    base_dir = Path(__file__).parent
 
-config = yaml.safe_load(Path("../config/config.yml").read_text())
-    
-GITHUB_CFG = config.get('github', {})
-RATE_LIMIT_CFG = GITHUB_CFG.get('rate_limit', {})
-CLIENT_CFG = GITHUB_CFG.get('client', {})
-LABELLING_CFG = config.get('labelling', {})
+    load_dotenv(dotenv_path=base_dir / "../config/.env")
+    config_path = base_dir / "../config/config.yml"
 
-for project in config["projects"]:
-    for model in project["models"]:
-        model["class"] = get_model_class(model["class"])
+    config = yaml.safe_load(config_path.read_text())
 
-async def run_data_fetching(project, db: AsyncDatabase, token_bucket: TokenBucket = None):
+    for project in config["projects"]:
+        for model in project["models"]:
+            model["class"] = get_model_class(model["class"])
+
+    return config
+
+async def run_data_fetching(project, db: AsyncDatabase, config: dict, token_bucket: TokenBucket = None):
     project_name = project['name']
     get_newest = project.get('get_newest', True)
 
+    client_cfg = config.get('github', {}).get('client', {})
     auth_token = os.path.expandvars(config['github']['token'])
 
     if get_newest:
         http_client = GitHubClient(auth_token,
                                    token_bucket,
-                                   concurrency=CLIENT_CFG.get('concurrency', 100),
-                                   timeout=CLIENT_CFG.get('timeout_seconds', 300))
+                                   concurrency=client_cfg.get('concurrency', 100),
+                                   timeout=client_cfg.get('timeout_seconds', 300))
 
         commit_repo = CommitRepository(project_name, db)
         file_repo = FileRepository(project_name, db)
@@ -67,7 +68,9 @@ async def run_data_fetching(project, db: AsyncDatabase, token_bucket: TokenBucke
     else:
         logging.info("Skipping fetch of new commit history")
 
-async def run_model_training(project, db: AsyncDatabase):
+async def run_model_training(project, db: AsyncDatabase, config: dict):
+    labelling_cfg = config.get('labelling', {})
+
     project_name = project['name']
     models = project.get('models', [])
     source_directory = project.get('source_directory', "src")
@@ -92,7 +95,7 @@ async def run_model_training(project, db: AsyncDatabase):
         feature_pipeline = FeatureEngineeringPipeline(file_repo,
                                                       plotter,
                                                       source_directory,
-                                                      labelling_config=LABELLING_CFG)
+                                                      labelling_config=labelling_cfg)
 
         if not is_ablation_study:
             training_pipe = ModelTrainingPipeline(project_name, models, feature_pipeline, images_dir, models_dir,
@@ -120,14 +123,18 @@ async def run_model_training(project, db: AsyncDatabase):
 
 
 async def main():
+    configure_event_loop()
+    setup_logging()
+    config = load_app_config()
+
     shared_token_bucket = TokenBucket()
     db = AsyncDatabase(config['mongo']['uri'], config['mongo']['database'])
 
-    tasks = [run_data_fetching(project, db, shared_token_bucket) for project in config["projects"]]
+    tasks = [run_data_fetching(project, db, config, shared_token_bucket) for project in config["projects"]]
     await asyncio.gather(*tasks)
 
     for project in config["projects"]:
-        await run_model_training(project, db)
+        await run_model_training(project, db, config)
 
 if __name__ == '__main__':
     asyncio.run(main())
